@@ -299,12 +299,29 @@ export async function fetchEducationCourses(): Promise<Record<string, string> | 
             return null;
         }
 
-        // Transform to ID -> Name map
+        // Transform to ID -> Name map using recursive extraction
+        // to handle POTENTIAL nested structure (e.g. Categories -> Courses)
         const courses: Record<string, string> = {};
-        if (data.education) {
-            Object.entries(data.education).forEach(([id, details]: [string, any]) => {
-                courses[id] = details.title || details.name || "Unknown Course";
+
+        const extractCourses = (obj: any) => {
+            if (!obj || typeof obj !== 'object') return;
+
+            // Check if this object is a course (has id and name/title)
+            // We ensure 'id' is present. 'title' or 'name' is the label.
+            if (obj.id && (obj.title || obj.name)) {
+                courses[String(obj.id)] = obj.title || obj.name;
+            }
+
+            // Recurse into children
+            Object.values(obj).forEach(value => {
+                if (typeof value === 'object') {
+                    extractCourses(value);
+                }
             });
+        };
+
+        if (data.education) {
+            extractCourses(data.education);
         }
 
         educationCoursesCache = courses;

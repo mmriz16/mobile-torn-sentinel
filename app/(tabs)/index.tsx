@@ -51,7 +51,7 @@ const AnimatedDot = ({ delay }: { delay: number }) => {
     return (
         <Animated.View
             style={[
-                { width: 4, height: 4, backgroundColor: '#44403C', borderRadius: 4 },
+                { width: 4, height: 4, backgroundColor: '#ffffff', borderRadius: 4 },
                 animatedStyle
             ]}
         />
@@ -543,6 +543,7 @@ export default function Home() {
                                         <Text className="text-white font-sans font-extrabold text-xs" numberOfLines={1}>
                                             {education.id && courseNames[education.id.toString()] ? courseNames[education.id.toString()] : `Course #${education.id}`}
                                         </Text>
+
                                     </View>
                                     <View className="items-end gap-1">
                                         <Text className="text-white/50 font-extrabold text-[10px] font-sans uppercase">ETA</Text>

@@ -9,9 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "jsEngine": "hermes",
       "supportsTablet": true
     },
     "android": {
+      "jsEngine": "hermes",
       "package": "com.mmriz16.tornsentinel",
       "adaptiveIcon": {
         "backgroundColor": "#000000",

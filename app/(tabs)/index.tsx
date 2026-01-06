@@ -5,22 +5,87 @@ import { Card } from "../../src/components/ui/card";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
 import { ProgressBar } from "../../src/components/ui/progress-bar";
 import {
-    fetchDrugStats,
+    fetchEducationCourses,
     fetchNetworth,
     fetchUserData,
+    fetchWeeklyXanaxUsage,
     formatCurrency,
     formatNumber,
     formatTimeRemaining,
-    getWeeklyXanaxUsage,
     TornNetworth,
     TornUserData
 } from "../../src/services/torn-api";
 
+import EducationIcon from '../../assets/icons/education.svg';
+import PlaneIcon from '../../assets/icons/plane.svg';
 import QaCompany from '../../assets/icons/qa-company.svg';
 import QaNetworth from '../../assets/icons/qa-networth.svg';
 import QaOthers from '../../assets/icons/qa-others.svg';
 import QaProperty from '../../assets/icons/qa-property.svg';
 import QaStats from '../../assets/icons/qa-stats.svg';
+
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+
+const AnimatedDot = ({ delay }: { delay: number }) => {
+    const opacity = useSharedValue(0.3);
+
+    useEffect(() => {
+        opacity.value = withDelay(
+            delay,
+            withRepeat(
+                withSequence(
+                    withTiming(1, { duration: 200 }),
+                    withTiming(0.3, { duration: 200 }),
+                    withTiming(0.3, { duration: 1600 }) // Idle time
+                ),
+                -1,
+                false
+            )
+        );
+    }, [delay, opacity]);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+    }));
+
+    return (
+        <Animated.View
+            style={[
+                { width: 4, height: 4, backgroundColor: '#44403C', borderRadius: 4 },
+                animatedStyle
+            ]}
+        />
+    );
+};
+
+const AnimatedPlane = ({ delay }: { delay: number }) => {
+    const opacity = useSharedValue(0.3);
+
+    useEffect(() => {
+        opacity.value = withDelay(
+            delay,
+            withRepeat(
+                withSequence(
+                    withTiming(1, { duration: 200 }),
+                    withTiming(0.3, { duration: 200 }),
+                    withTiming(0.3, { duration: 1600 }) // Idle time
+                ),
+                -1,
+                false
+            )
+        );
+    }, [delay, opacity]);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+    }));
+
+    return (
+        <Animated.View style={animatedStyle}>
+            <PlaneIcon width={24} height={24} />
+        </Animated.View>
+    );
+};
 
 export default function Home() {
     const [userData, setUserData] = useState<TornUserData | null>(null);
@@ -35,6 +100,7 @@ export default function Home() {
         chain: 0
     });
     const [weeklyXanax, setWeeklyXanax] = useState(0);
+    const [courseNames, setCourseNames] = useState<Record<string, string>>({});
 
     useEffect(() => {
         loadData();
@@ -92,14 +158,18 @@ export default function Home() {
         if (data?.profile?.id) {
             const nw = await fetchNetworth(data.profile.id);
             setNetworth(nw);
-
-            // Fetch drug stats and calculate weekly xanax
-            const drugStats = await fetchDrugStats(data.profile.id);
-            if (drugStats?.personalstats?.drugs?.xanax !== undefined) {
-                const weekly = getWeeklyXanaxUsage(drugStats.personalstats.drugs.xanax, data.profile.id);
-                setWeeklyXanax(weekly);
-            }
         }
+
+        // Fetch weekly xanax usage using API timestamp
+        const weekly = await fetchWeeklyXanaxUsage();
+        setWeeklyXanax(weekly);
+
+        // Fetch education courses
+        const courses = await fetchEducationCourses();
+        if (courses) {
+            setCourseNames(courses);
+        }
+
         setIsLoading(false);
     };
 
@@ -158,18 +228,35 @@ export default function Home() {
                     {/* Travel Card */}
                     {travel && (
                         <Card className="pt-4">
-                            <View className="flex-row px-4 items-start justify-between">
+                            <View className="flex-row px-4 items-center justify-between">
                                 <View className="flex-1">
                                     <Text className="font-mono text-white/80 text-[10px]">
-                                        {profile?.status?.state === "Traveling" ? "Traveling" : "Location"}
+                                        {new Date(travel.departed_at * 1000).toLocaleTimeString('en-GB', {
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            second: '2-digit',
+                                            timeZoneName: 'short'
+                                        })}
                                     </Text>
                                     <Text className="text-white font-bold text-lg">
                                         Torn City
                                     </Text>
                                 </View>
+                                <View className="flex-row items-center gap-2">
+                                    <AnimatedDot delay={0} />
+                                    <AnimatedDot delay={400} />
+                                    <AnimatedPlane delay={800} />
+                                    <AnimatedDot delay={1200} />
+                                    <AnimatedDot delay={1600} />
+                                </View>
                                 <View className="flex-1 items-end">
                                     <Text className="font-mono text-white/80 text-[10px]">
-                                        {formatTimeRemaining(travel.time_left)}
+                                        {new Date(travel.arrival_at * 1000).toLocaleTimeString('en-GB', {
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            second: '2-digit',
+                                            timeZoneName: 'short'
+                                        })}
                                     </Text>
                                     <Text className="text-white font-bold text-lg">
                                         {travel.destination}
@@ -448,11 +535,13 @@ export default function Home() {
                             {/* Education ROW */}
                             {education && (
                                 <View className="flex-row bg-tactical-950 gap-2 border items-center border-tactical-800 p-2.5 rounded-sm">
-                                    <View className="bg-tactical-950 border border-tactical-800 p-2.5 rounded-sm w-[38px] h-[38px]"></View>
+                                    <View className="bg-tactical-950 border border-tactical-800 p-2.5 rounded-sm w-[38px] h-[38px]">
+                                        <EducationIcon className="w-[24px] h-[24px] color-accent-yellow" />
+                                    </View>
                                     <View className="flex-1 gap-1">
                                         <Text className="text-white/50 font-mono uppercase font-extrabold text-[10px]">education</Text>
                                         <Text className="text-white font-sans font-extrabold text-xs" numberOfLines={1}>
-                                            Course #{education.id}
+                                            {education.id && courseNames[education.id.toString()] ? courseNames[education.id.toString()] : `Course #${education.id}`}
                                         </Text>
                                     </View>
                                     <View className="items-end gap-1">
@@ -465,6 +554,6 @@ export default function Home() {
                     </Card>
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }

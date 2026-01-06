@@ -215,33 +215,103 @@ export function formatCurrency(num: number): string {
     return "$" + formatNumber(num);
 }
 
-// Get Monday of current week (00:00:00 device time)
-export function getCurrentWeekStart(): number {
+// Get Monday of current week (00:00:00 device time) as Unix timestamp (seconds)
+export function getCurrentWeekMondayTimestamp(): number {
     const now = new Date();
     const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust so Monday = 0
     const monday = new Date(now);
     monday.setDate(now.getDate() - diff);
     monday.setHours(0, 0, 0, 0);
-    return monday.getTime();
+    return Math.floor(monday.getTime() / 1000); // Convert to Unix timestamp (seconds)
 }
 
-// Get weekly xanax usage
-export function getWeeklyXanaxUsage(currentTotal: number, playerId: number): number {
-    const weekStart = getCurrentWeekStart();
-    const storageKey = `xanax_baseline_${playerId}`;
-    const weekStartKey = `xanax_week_start_${playerId}`;
+// Fetch xanax taken at a specific timestamp (uses Torn API v1)
+async function fetchXanaxAtTimestamp(timestamp?: number): Promise<number | null> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
 
-    const storedWeekStart = localStorage.getItem(weekStartKey);
-    const storedBaseline = localStorage.getItem(storageKey);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    // If it's a new week or no baseline exists, reset baseline
-    if (!storedWeekStart || parseInt(storedWeekStart) < weekStart || !storedBaseline) {
-        localStorage.setItem(weekStartKey, weekStart.toString());
-        localStorage.setItem(storageKey, currentTotal.toString());
+        let url = `https://api.torn.com/user/?selections=personalstats&stat=xantaken&key=${apiKey}`;
+        if (timestamp) {
+            url += `&timestamp=${timestamp}`;
+        }
+
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        return data.personalstats?.xantaken ?? 0;
+    } catch (error) {
+        console.error("Failed to fetch xanax stats:", error);
+        return null;
+    }
+}
+
+// Fetch weekly xanax usage (Monday to now)
+export async function fetchWeeklyXanaxUsage(): Promise<number> {
+    const mondayTimestamp = getCurrentWeekMondayTimestamp();
+
+    // Fetch xanax count at start of week (Monday 00:00)
+    const mondayXanax = await fetchXanaxAtTimestamp(mondayTimestamp);
+
+    // Fetch current xanax count
+    const currentXanax = await fetchXanaxAtTimestamp();
+
+    if (mondayXanax === null || currentXanax === null) {
         return 0;
     }
 
-    const baseline = parseInt(storedBaseline);
-    return Math.max(0, currentTotal - baseline);
+    return Math.max(0, currentXanax - mondayXanax);
+}
+// Education courses cache
+let educationCoursesCache: Record<string, string> | null = null;
+
+export async function fetchEducationCourses(): Promise<Record<string, string> | null> {
+    if (educationCoursesCache) return educationCoursesCache;
+
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(
+            `${TORN_API_V2_BASE}/torn?selections=education&key=${apiKey}`,
+            { signal: controller.signal }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        // Transform to ID -> Name map
+        const courses: Record<string, string> = {};
+        if (data.education) {
+            Object.entries(data.education).forEach(([id, details]: [string, any]) => {
+                courses[id] = details.title || details.name || "Unknown Course";
+            });
+        }
+
+        educationCoursesCache = courses;
+        return courses;
+
+    } catch (error) {
+        console.error("Failed to fetch education courses:", error);
+        return null;
+    }
 }

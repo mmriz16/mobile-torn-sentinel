@@ -26,6 +26,7 @@ module.exports = {
       fontFamily: {
         sans: ["Inter_400Regular"],
         mono: ["JetBrainsMono_400Regular"],
+        display: ["PlusJakartaSans_800ExtraBold"],
       },
     },
   },

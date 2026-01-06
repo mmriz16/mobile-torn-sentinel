@@ -93,6 +93,16 @@ export default function Home() {
     const [userData, setUserData] = useState<TornUserData | null>(null);
     const [networth, setNetworth] = useState<TornNetworth | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    // Store end timestamps (ms) instead of remaining seconds for exact timing
+    const [cooldownEndTimes, setCooldownEndTimes] = useState({ drug: 0, booster: 0, medical: 0, jail: 0 });
+    const [barEndTimes, setBarEndTimes] = useState({
+        energy: 0,
+        nerve: 0,
+        happy: 0,
+        life: 0,
+        chain: 0
+    });
+    // Calculated remaining times (updated every second)
     const [cooldownTimers, setCooldownTimers] = useState({ drug: 0, booster: 0, medical: 0, jail: 0 });
     const [barTimers, setBarTimers] = useState({
         energy: 0,
@@ -108,57 +118,71 @@ export default function Home() {
     useEffect(() => {
         loadData(true);
 
-        // Auto-refresh every 5 seconds (silent)
+        // Auto-refresh every 10 seconds (silent)
         const refreshInterval = setInterval(() => {
             loadData(false);
-        }, 5000);
+        }, 10000);
 
         return () => clearInterval(refreshInterval);
     }, []);
 
-    // Update cooldown timers and bar timers every second
+    // Set end timestamps when userData changes
     useEffect(() => {
         if (!userData) return;
 
-        // Calculate jail cooldown from profile status if in jail
-        let jailTime = 0;
+        const now = Date.now();
+
+        // Calculate jail end time from profile status if in jail
+        let jailEndTime = 0;
         if (userData.profile?.status?.state === "Jail" && userData.profile?.status?.until) {
-            jailTime = Math.max(0, userData.profile.status.until - Math.floor(Date.now() / 1000));
+            jailEndTime = userData.profile.status.until * 1000; // Convert to ms
         }
 
-        setCooldownTimers({
-            drug: userData.cooldowns.drug,
-            booster: userData.cooldowns.booster,
-            medical: userData.cooldowns.medical,
-            jail: jailTime,
+        setCooldownEndTimes({
+            drug: now + (userData.cooldowns.drug * 1000),
+            booster: now + (userData.cooldowns.booster * 1000),
+            medical: now + (userData.cooldowns.medical * 1000),
+            jail: jailEndTime,
         });
 
-        setBarTimers({
-            energy: userData.bars?.energy?.full_time ?? 0,
-            nerve: userData.bars?.nerve?.full_time ?? 0,
-            happy: userData.bars?.happy?.full_time ?? 0,
-            life: userData.bars?.life?.full_time ?? 0,
-            chain: userData.bars?.chain?.timeout ?? 0,
+        setBarEndTimes({
+            energy: now + ((userData.bars?.energy?.full_time ?? 0) * 1000),
+            nerve: now + ((userData.bars?.nerve?.full_time ?? 0) * 1000),
+            happy: now + ((userData.bars?.happy?.full_time ?? 0) * 1000),
+            life: now + ((userData.bars?.life?.full_time ?? 0) * 1000),
+            chain: now + ((userData.bars?.chain?.timeout ?? 0) * 1000),
         });
+    }, [userData]);
 
-        const interval = setInterval(() => {
-            setCooldownTimers(prev => ({
-                drug: Math.max(0, prev.drug - 1),
-                booster: Math.max(0, prev.booster - 1),
-                medical: Math.max(0, prev.medical - 1),
-                jail: Math.max(0, prev.jail - 1),
-            }));
-            setBarTimers(prev => ({
-                energy: Math.max(0, prev.energy - 1),
-                nerve: Math.max(0, prev.nerve - 1),
-                happy: Math.max(0, prev.happy - 1),
-                life: Math.max(0, prev.life - 1),
-                chain: Math.max(0, prev.chain - 1),
-            }));
-        }, 1000);
+    // Update displayed timers every second based on end timestamps
+    useEffect(() => {
+        const updateTimers = () => {
+            const now = Date.now();
+
+            setCooldownTimers({
+                drug: Math.max(0, Math.floor((cooldownEndTimes.drug - now) / 1000)),
+                booster: Math.max(0, Math.floor((cooldownEndTimes.booster - now) / 1000)),
+                medical: Math.max(0, Math.floor((cooldownEndTimes.medical - now) / 1000)),
+                jail: Math.max(0, Math.floor((cooldownEndTimes.jail - now) / 1000)),
+            });
+
+            setBarTimers({
+                energy: Math.max(0, Math.floor((barEndTimes.energy - now) / 1000)),
+                nerve: Math.max(0, Math.floor((barEndTimes.nerve - now) / 1000)),
+                happy: Math.max(0, Math.floor((barEndTimes.happy - now) / 1000)),
+                life: Math.max(0, Math.floor((barEndTimes.life - now) / 1000)),
+                chain: Math.max(0, Math.floor((barEndTimes.chain - now) / 1000)),
+            });
+        };
+
+        // Update immediately
+        updateTimers();
+
+        // Then update every second
+        const interval = setInterval(updateTimers, 1000);
 
         return () => clearInterval(interval);
-    }, [userData]);
+    }, [cooldownEndTimes, barEndTimes]);
 
     const loadData = async (showLoading = true) => {
         if (showLoading) setIsLoading(true);

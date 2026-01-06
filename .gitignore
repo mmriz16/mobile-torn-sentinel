@@ -5,6 +5,7 @@ node_modules/
 
 # Expo
 .expo/
+.expo-shared/
 dist/
 web-build/
 expo-env.d.ts
@@ -41,3 +42,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# EAS
+.keystore
+credentials.json
+android/local.properties

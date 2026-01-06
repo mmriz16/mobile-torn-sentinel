@@ -1,0 +1,7 @@
+.vscode/
+.expo/
+.expo-shared/
+node_modules/
+credentials/
+*.p12
+*.jks

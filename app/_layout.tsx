@@ -1,12 +1,17 @@
 import {
+  Inter_300Light,
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
+  Inter_800ExtraBold,
+  Inter_900Black,
   useFonts,
 } from "@expo-google-fonts/inter";
 import {
   JetBrainsMono_400Regular,
+  JetBrainsMono_700Bold,
+  JetBrainsMono_800ExtraBold,
 } from "@expo-google-fonts/jetbrains-mono";
 import {
   PlusJakartaSans_800ExtraBold,
@@ -33,11 +38,16 @@ async function getApiKey(): Promise<string | null> {
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
+    Inter_300Light,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Inter_800ExtraBold,
+    Inter_900Black,
     JetBrainsMono_400Regular,
+    JetBrainsMono_700Bold,
+    JetBrainsMono_800ExtraBold,
     PlusJakartaSans_800ExtraBold,
   });
 

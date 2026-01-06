@@ -96,7 +96,7 @@ export default function ApiKey() {
                     </View>
                 </View>
                 <Card className="mt-auto">
-                    <Text className="text-tactical-700 uppercase font-sans font-extrabold text-sm p-4 border-b border-tactical-800">Api Configuration</Text>
+                    <Text className="text-tactical-700 uppercase font-sans-extrabold text-sm p-4 border-b border-tactical-800">Api Configuration</Text>
                     <View className="p-4 gap-2.5">
                         <Text className="text-white text-[8px] font-sans uppercase">torn api key</Text>
                         <TextInput
@@ -126,7 +126,7 @@ export default function ApiKey() {
                     {isLoading ? (
                         <ActivityIndicator color="#fff" />
                     ) : (
-                        <Text className="uppercase font-mono font-bold text-sm text-white">Continue</Text>
+                        <Text className="uppercase font-mono-bold text-sm text-white">Continue</Text>
                     )}
                 </Pressable>
             </View>

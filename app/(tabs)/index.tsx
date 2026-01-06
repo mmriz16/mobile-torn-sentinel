@@ -12,6 +12,7 @@ import {
     formatCurrency,
     formatNumber,
     formatTimeRemaining,
+    getApiRequestCount,
     TornNetworth,
     TornUserData
 } from "../../src/services/torn-api";
@@ -24,6 +25,7 @@ import QaOthers from '../../assets/icons/qa-others.svg';
 import QaProperty from '../../assets/icons/qa-property.svg';
 import QaStats from '../../assets/icons/qa-stats.svg';
 
+import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 const AnimatedDot = ({ delay }: { delay: number }) => {
@@ -101,9 +103,17 @@ export default function Home() {
     });
     const [weeklyXanax, setWeeklyXanax] = useState(0);
     const [courseNames, setCourseNames] = useState<Record<string, string>>({});
+    const [apiRequestCount, setApiRequestCount] = useState(0);
 
     useEffect(() => {
-        loadData();
+        loadData(true);
+
+        // Auto-refresh every 5 seconds (silent)
+        const refreshInterval = setInterval(() => {
+            loadData(false);
+        }, 5000);
+
+        return () => clearInterval(refreshInterval);
     }, []);
 
     // Update cooldown timers and bar timers every second
@@ -150,8 +160,8 @@ export default function Home() {
         return () => clearInterval(interval);
     }, [userData]);
 
-    const loadData = async () => {
-        setIsLoading(true);
+    const loadData = async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         const data = await fetchUserData();
         setUserData(data);
 
@@ -170,7 +180,10 @@ export default function Home() {
             setCourseNames(courses);
         }
 
-        setIsLoading(false);
+        // Update API request count
+        setApiRequestCount(getApiRequestCount());
+
+        if (showLoading) setIsLoading(false);
     };
 
     if (isLoading) {
@@ -202,6 +215,12 @@ export default function Home() {
         ? 1 - (travel.time_left / (travel.arrival_at - travel.departed_at))
         : 0;
 
+    // Determine origin city
+    let originCity = "Torn City";
+    if (profile?.status?.description.startsWith("Returning to Torn from ")) {
+        originCity = profile.status.description.replace("Returning to Torn from ", "");
+    }
+
     return (
         <SafeAreaView className="flex-1 bg-tactical-950">
             <GridPattern />
@@ -209,7 +228,7 @@ export default function Home() {
                 {/* Header */}
                 <View className="flex-row justify-between items-center">
                     <View>
-                        <Text className="text-white font-sans font-bold text-lg">
+                        <Text className="text-white font-sans-bold text-lg">
                             Welcome back, <Text className="text-accent-yellow">{profile?.name ?? "Agent"}</Text>
                         </Text>
                         <Text className="text-white/50 text-[10px] font-mono uppercase">
@@ -218,7 +237,7 @@ export default function Home() {
                     </View>
                     <View className="flex-row items-center gap-2">
                         <View>
-                            <Text className="uppercase rounded-[4px] p-[6px] text-accent-green font-mono text-[10px] bg-tactical-900 border border-tactical-800">API Req: 5/min</Text>
+                            <Text className="uppercase rounded-[4px] p-[6px] text-accent-green font-mono text-[10px] bg-tactical-900 border border-tactical-800">API Req: {apiRequestCount}/min</Text>
                         </View>
                     </View>
                 </View>
@@ -239,7 +258,7 @@ export default function Home() {
                                         })}
                                     </Text>
                                     <Text className="text-white font-bold text-lg">
-                                        Torn City
+                                        {originCity}
                                     </Text>
                                 </View>
                                 <View className="flex-row items-center gap-2">
@@ -279,8 +298,11 @@ export default function Home() {
                         {/* Daily Profit Card */}
                         <Card className="p-4 flex-1">
                             <View className="gap-0">
-                                <Text className="uppercase font-sans text-xs font-extrabold text-accent-yellow">daily profit</Text>
-                                <Text className="text-lg font-extrabold font-mono text-white">--</Text>
+                                <View className="flex-row items-center gap-1">
+                                    <Feather name="trending-up" size={12} color="#F59E0B" />
+                                    <Text className="uppercase font-sans-extrabold text-xs text-accent-yellow">daily profit</Text>
+                                </View>
+                                <Text className="text-lg font-mono-extrabold text-white">--</Text>
                             </View>
                             <View className="flex-row gap-1">
                                 <Text className="text-[10px] uppercase font-mono text-white/50">no data</Text>
@@ -290,8 +312,11 @@ export default function Home() {
                         {/* Networth Card */}
                         <Card className="p-4 flex-1">
                             <View className="gap-0">
-                                <Text className="uppercase font-sans text-xs font-extrabold text-accent-yellow">networth</Text>
-                                <Text className="text-lg font-extrabold font-mono text-white">{formatCurrency(totalNetworth)}</Text>
+                                <View className="flex-row items-center gap-1">
+                                    <FontAwesome5 name="coins" size={12} color="#F59E0B" />
+                                    <Text className="uppercase font-sans-extrabold text-xs text-accent-yellow">networth</Text>
+                                </View>
+                                <Text className="text-lg font-mono-extrabold  text-white">{formatCurrency(totalNetworth)}</Text>
                             </View>
                             <Text className="text-[10px] uppercase font-mono text-white/50">Wallet {formatCurrency(walletAmount)}</Text>
                         </Card>
@@ -302,44 +327,47 @@ export default function Home() {
                 <View className="gap-2.5">
                     {/* Quick Actions */}
                     <View className="flex-row justify-between items-center">
-                        <Text className="uppercase font-sans text-sm font-extrabold text-white/50">quick actions</Text>
+                        <Text className="uppercase font-sans-extrabold text-sm text-white/50">quick actions</Text>
                         <Text className="text-[10px] uppercase font-mono text-white/50">edit</Text>
                     </View>
                     <View className="flex-row gap-2.5">
                         <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
                             <QaProperty width={24} height={24} />
-                            <Text className="text-[8px] font-bold uppercase font-sans text-white/80">property</Text>
+                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">property</Text>
                         </Card>
                         <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
                             <QaCompany width={24} height={24} />
-                            <Text className="text-[8px] font-bold uppercase font-sans text-white/80">company</Text>
+                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">company</Text>
                         </Card>
                         <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
                             <QaStats width={24} height={24} />
-                            <Text className="text-[8px] font-bold uppercase font-sans text-white/80">stats</Text>
+                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">stats</Text>
                         </Card>
                         <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
                             <QaNetworth width={24} height={24} />
-                            <Text className="text-[8px] font-bold uppercase font-sans text-white/80">networth</Text>
+                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">networth</Text>
                         </Card>
                         <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
                             <QaOthers width={24} height={24} />
-                            <Text className="text-[8px] font-bold uppercase font-sans text-white/80">others</Text>
+                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">others</Text>
                         </Card>
                     </View>
 
                     {/* Status Overview */}
                     <Card>
-                        <Text className="uppercase font-sans text-sm font-extrabold text-tactical-700 p-4 border-b border-tactical-800">status overview</Text>
+                        <Text className="uppercase font-sans-extrabold text-sm text-tactical-700 p-4 border-b border-tactical-800">status overview</Text>
                         <View className="gap-2.5 p-4">
                             {/* ROW 1 */}
                             <View className="flex-row gap-2.5">
                                 {/* Energy */}
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
-                                        <Text className="text-accent-green uppercase font-extrabold text-[10px]">Energy</Text>
+                                        <View className="flex-row items-center gap-1">
+                                            <Feather name="zap" size={10} color="#10B981" />
+                                            <Text className="text-accent-green uppercase font-extrabold text-[10px]">Energy</Text>
+                                        </View>
                                         <View className="flex-row items-end gap-1">
-                                            <Text className="text-white font-extrabold text-lg font-mono">{bars?.energy?.current ?? 0}</Text>
+                                            <Text className="text-white text-lg font-mono-extrabold">{bars?.energy?.current ?? 0}</Text>
                                             <Text className="text-white/50 text-[10px] pb-1 font-mono">
                                                 {barTimers.energy > 0
                                                     ? formatTimeRemaining(barTimers.energy)
@@ -359,9 +387,12 @@ export default function Home() {
                                 {/* Nerve */}
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
-                                        <Text className="text-accent-red uppercase font-extrabold text-[10px]">Nerve</Text>
+                                        <View className="flex-row items-center gap-1">
+                                            <MaterialCommunityIcons name="brain" size={10} color="#F43F5E" />
+                                            <Text className="text-accent-red uppercase font-extrabold text-[10px]">Nerve</Text>
+                                        </View>
                                         <View className="flex-row items-end gap-1">
-                                            <Text className="text-white font-extrabold text-lg font-mono">{bars?.nerve?.current ?? 0}</Text>
+                                            <Text className="text-white text-lg font-mono-extrabold">{bars?.nerve?.current ?? 0}</Text>
                                             <Text className="text-white/50 text-[10px] pb-1 font-mono">
                                                 {barTimers.nerve > 0
                                                     ? formatTimeRemaining(barTimers.nerve)
@@ -381,9 +412,12 @@ export default function Home() {
                                 {/* Happy */}
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
-                                        <Text className="text-accent-yellow uppercase font-extrabold text-[10px]">Happy</Text>
+                                        <View className="flex-row items-center gap-1">
+                                            <Feather name="smile" size={10} color="#F59E0B" />
+                                            <Text className="text-accent-yellow uppercase font-extrabold text-[10px]">Happy</Text>
+                                        </View>
                                         <View className="flex-row items-end gap-1">
-                                            <Text className="text-white font-extrabold text-lg font-mono">{formatNumber(bars?.happy?.current ?? 0)}</Text>
+                                            <Text className="text-white text-lg font-mono-extrabold">{formatNumber(bars?.happy?.current ?? 0)}</Text>
                                             <Text className="text-white/50 text-[10px] pb-1 font-mono">
                                                 {barTimers.happy > 0
                                                     ? formatTimeRemaining(barTimers.happy)
@@ -406,9 +440,12 @@ export default function Home() {
                                 {/* Life */}
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
-                                        <Text className="text-accent-blue uppercase font-extrabold text-[10px]">Life</Text>
+                                        <View className="flex-row items-center gap-1">
+                                            <Feather name="heart" size={10} color="#0EA5E9" />
+                                            <Text className="text-accent-blue uppercase font-extrabold text-[10px]">Life</Text>
+                                        </View>
                                         <View className="flex-row items-end gap-1">
-                                            <Text className="text-white font-extrabold text-lg font-mono">{formatNumber(bars?.life?.current ?? 0)}</Text>
+                                            <Text className="text-white text-lg font-mono-extrabold">{formatNumber(bars?.life?.current ?? 0)}</Text>
                                             <Text className="text-white/50 text-[10px] pb-1 font-mono">
                                                 {barTimers.life > 0
                                                     ? formatTimeRemaining(barTimers.life)
@@ -429,7 +466,10 @@ export default function Home() {
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
                                         <View className="flex-row items-center justify-between">
-                                            <Text className="text-accent-purple uppercase font-extrabold text-[10px]">Chain</Text>
+                                            <View className="flex-row items-center gap-1">
+                                                <Feather name="link" size={10} color="#B720F7" />
+                                                <Text className="text-accent-purple uppercase font-extrabold text-[10px]">Chain</Text>
+                                            </View>
                                             <Text className="text-white/50 text-[10px] font-mono">
                                                 {barTimers.chain > 0
                                                     ? formatTimeRemaining(barTimers.chain)
@@ -437,7 +477,7 @@ export default function Home() {
                                             </Text>
                                         </View>
                                         <View className="flex-row items-end gap-1">
-                                            <Text className="text-white font-extrabold text-lg font-mono">{bars?.chain?.current ?? 0}</Text>
+                                            <Text className="text-white text-lg font-mono-extrabold">{bars?.chain?.current ?? 0}</Text>
                                             <Text className="text-white/50 text-[10px] pb-1 font-mono">/{bars?.chain?.max ?? 0}</Text>
                                         </View>
                                     </View>
@@ -457,7 +497,7 @@ export default function Home() {
                     {/* Cooldown Status */}
                     <Card>
                         <View className="flex-row items-center justify-between p-4 border-b border-tactical-800">
-                            <Text className="uppercase font-sans text-sm font-extrabold text-tactical-700">Cooldown Status</Text>
+                            <Text className="uppercase font-sans-extrabold text-sm text-tactical-700">Cooldown Status</Text>
                             <Text className="uppercase p-[6px] bg-tactical-950 border border-tactical-800 rounded-[2px] font-mono text-[10px] text-tactical-700">mon-sun: <Text className="text-accent-blue">{weeklyXanax} xanax</Text></Text>
                         </View>
                         <View className="gap-2.5 p-4">
@@ -466,7 +506,10 @@ export default function Home() {
                                 {/* Drugs */}
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
-                                        <Text className="text-white/50 uppercase font-extrabold text-[10px]">drugs</Text>
+                                        <View className="flex-row items-center gap-1">
+                                            <MaterialCommunityIcons name="pill" size={10} color="rgba(255,255,255,0.5)" />
+                                            <Text className="text-white/50 uppercase font-extrabold text-[10px]">drugs</Text>
+                                        </View>
                                         <Text className={`text-[10px] font-mono uppercase ${cooldownTimers.drug === 0 ? 'text-accent-green' : 'text-white'}`}>
                                             {formatTimeRemaining(cooldownTimers.drug)}
                                         </Text>
@@ -483,7 +526,10 @@ export default function Home() {
                                 {/* Booster */}
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
-                                        <Text className="text-white/50 uppercase font-extrabold text-[10px]">booster</Text>
+                                        <View className="flex-row items-center gap-1">
+                                            <Feather name="battery" size={10} color="rgba(255,255,255,0.5)" />
+                                            <Text className="text-white/50 uppercase font-extrabold text-[10px]">booster</Text>
+                                        </View>
                                         <Text className={`text-[10px] font-mono uppercase ${cooldownTimers.booster === 0 ? 'text-accent-green' : 'text-white'}`}>
                                             {formatTimeRemaining(cooldownTimers.booster)}
                                         </Text>
@@ -500,7 +546,10 @@ export default function Home() {
                                 {/* Medical */}
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
-                                        <Text className="text-white/50 uppercase font-extrabold text-[10px]">medical</Text>
+                                        <View className="flex-row items-center gap-1">
+                                            <FontAwesome5 name="hospital" size={10} color="rgba(255,255,255,0.5)" />
+                                            <Text className="text-white/50 uppercase font-extrabold text-[10px]">medical</Text>
+                                        </View>
                                         <Text className={`text-[10px] font-mono uppercase ${cooldownTimers.medical === 0 ? 'text-accent-green' : 'text-white'}`}>
                                             {formatTimeRemaining(cooldownTimers.medical)}
                                         </Text>
@@ -517,7 +566,10 @@ export default function Home() {
                                 {/* Jail */}
                                 <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
                                     <View className="px-2.5">
-                                        <Text className="text-white/50 uppercase font-extrabold text-[10px]">jail</Text>
+                                        <View className="flex-row items-center gap-1">
+                                            <FontAwesome5 name="gavel" size={10} color="rgba(255,255,255,0.5)" />
+                                            <Text className="text-white/50 uppercase font-extrabold text-[10px]">jail</Text>
+                                        </View>
                                         <Text className={`text-[10px] font-mono uppercase ${cooldownTimers.medical === 0 ? 'text-accent-green' : 'text-white'}`}>
                                             {formatTimeRemaining(cooldownTimers.medical)}
                                         </Text>
@@ -535,18 +587,18 @@ export default function Home() {
                             {/* Education ROW */}
                             {education && (
                                 <View className="flex-row bg-tactical-950 gap-2 border items-center border-tactical-800 p-2.5 rounded-sm">
-                                    <View className="bg-tactical-950 border border-tactical-800 p-2.5 rounded-sm w-[38px] h-[38px]">
-                                        <EducationIcon className="w-[24px] h-[24px] color-accent-yellow" />
+                                    <View className="bg-tactical-950 border border-tactical-800 p-2.5 rounded-sm w-[38px] h-[38px] items-center justify-center">
+                                        <EducationIcon width={24} height={24} color="#F59E0B" />
                                     </View>
                                     <View className="flex-1 gap-1">
-                                        <Text className="text-white/50 font-mono uppercase font-extrabold text-[10px]">education</Text>
-                                        <Text className="text-white font-sans font-extrabold text-xs" numberOfLines={1}>
+                                        <Text className="text-white/50 font-mono-extrabold uppercase text-[10px]">education</Text>
+                                        <Text className="text-white font-sans-extrabold text-xs" numberOfLines={1}>
                                             {education.id && courseNames[education.id.toString()] ? courseNames[education.id.toString()] : `Course #${education.id}`}
                                         </Text>
 
                                     </View>
                                     <View className="items-end gap-1">
-                                        <Text className="text-white/50 font-extrabold text-[10px] font-sans uppercase">ETA</Text>
+                                        <Text className="text-white/50 text-[10px] font-sans-extrabold uppercase">ETA</Text>
                                         <Text className="text-accent-yellow text-xs font-mono uppercase">{educationTimeString}</Text>
                                     </View>
                                 </View>

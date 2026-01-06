@@ -3,6 +3,29 @@ import { Platform } from "react-native";
 
 const TORN_API_V2_BASE = "https://api.torn.com/v2";
 
+// API Request Tracking
+let apiRequestsCount = 0;
+let apiRequestsStartTimestamp = Date.now();
+
+function trackApiRequest() {
+    const now = Date.now();
+    if (now - apiRequestsStartTimestamp > 60000) {
+        // Reset every minute
+        apiRequestsCount = 1;
+        apiRequestsStartTimestamp = now;
+    } else {
+        apiRequestsCount++;
+    }
+}
+
+export function getApiRequestCount(): number {
+    // If more than a minute has passed since last request, count is stale, return 0
+    if (Date.now() - apiRequestsStartTimestamp > 60000) {
+        return 0;
+    }
+    return apiRequestsCount;
+}
+
 // Get API key from storage
 export async function getApiKey(): Promise<string | null> {
     if (Platform.OS === "web") {
@@ -113,6 +136,7 @@ export async function fetchDrugStats(playerId: number): Promise<TornDrugStats | 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
+        trackApiRequest();
         const response = await fetch(
             `${TORN_API_V2_BASE}/user/${playerId}/personalstats?cat=drugs&key=${apiKey}`,
             { signal: controller.signal }
@@ -142,6 +166,7 @@ export async function fetchUserData(): Promise<TornUserData | null> {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
+        trackApiRequest();
         const response = await fetch(
             `${TORN_API_V2_BASE}/user?selections=profile,bars,cooldowns,education,travel&key=${apiKey}`,
             { signal: controller.signal }
@@ -171,6 +196,7 @@ export async function fetchNetworth(playerId: number): Promise<TornNetworth | nu
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
+        trackApiRequest();
         const response = await fetch(
             `${TORN_API_V2_BASE}/user/${playerId}/personalstats?cat=networth&key=${apiKey}`,
             { signal: controller.signal }
@@ -240,6 +266,7 @@ async function fetchXanaxAtTimestamp(timestamp?: number): Promise<number | null>
             url += `&timestamp=${timestamp}`;
         }
 
+        trackApiRequest();
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
 
@@ -286,6 +313,7 @@ export async function fetchEducationCourses(): Promise<Record<string, string> | 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
+        trackApiRequest();
         const response = await fetch(
             `${TORN_API_V2_BASE}/torn?selections=education&key=${apiKey}`,
             { signal: controller.signal }

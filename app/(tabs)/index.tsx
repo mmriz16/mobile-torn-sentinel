@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ManageShortcutsModal } from "../../src/components/modals/manage-shortcuts-modal";
 import { Card } from "../../src/components/ui/card";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
 import { ProgressBar } from "../../src/components/ui/progress-bar";
+import TravelLoader from "../../src/components/ui/travel-loader";
+import { AVAILABLE_SHORTCUTS, DEFAULT_SHORTCUTS } from "../../src/constants/shortcuts";
+import { registerForPushNotificationsAsync, scheduleAllNotifications } from '../../src/utils/notifications';
+
 import {
     fetchEducationCourses,
     fetchNetworth,
@@ -17,83 +24,22 @@ import {
     TornUserData
 } from "../../src/services/torn-api";
 
+// 1. IMPORT Helper Responsif (Pake Alias biar pendek)
+import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from '../../src/utils/responsive';
+
 import EducationIcon from '../../assets/icons/education.svg';
-import PlaneIcon from '../../assets/icons/plane.svg';
-import QaCompany from '../../assets/icons/qa-company.svg';
-import QaNetworth from '../../assets/icons/qa-networth.svg';
 import QaOthers from '../../assets/icons/qa-others.svg';
-import QaProperty from '../../assets/icons/qa-property.svg';
-import QaStats from '../../assets/icons/qa-stats.svg';
 
-import { Feather, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { BatteryCharging, Brain, Cannabis, Coins, Columns4, Cross, Heart, Link, Smile, TrendingUp, TriangleAlert, X, Zap } from 'lucide-react-native';
 
-const AnimatedDot = ({ delay }: { delay: number }) => {
-    const opacity = useSharedValue(0.3);
-
-    useEffect(() => {
-        opacity.value = withDelay(
-            delay,
-            withRepeat(
-                withSequence(
-                    withTiming(1, { duration: 200 }),
-                    withTiming(0.3, { duration: 200 }),
-                    withTiming(0.3, { duration: 1600 }) // Idle time
-                ),
-                -1,
-                false
-            )
-        );
-    }, [delay, opacity]);
-
-    const animatedStyle = useAnimatedStyle(() => ({
-        opacity: opacity.value,
-    }));
-
-    return (
-        <Animated.View
-            style={[
-                { width: 4, height: 4, backgroundColor: '#ffffff', borderRadius: 4 },
-                animatedStyle
-            ]}
-        />
-    );
-};
-
-const AnimatedPlane = ({ delay }: { delay: number }) => {
-    const opacity = useSharedValue(0.3);
-
-    useEffect(() => {
-        opacity.value = withDelay(
-            delay,
-            withRepeat(
-                withSequence(
-                    withTiming(1, { duration: 200 }),
-                    withTiming(0.3, { duration: 200 }),
-                    withTiming(0.3, { duration: 1600 }) // Idle time
-                ),
-                -1,
-                false
-            )
-        );
-    }, [delay, opacity]);
-
-    const animatedStyle = useAnimatedStyle(() => ({
-        opacity: opacity.value,
-    }));
-
-    return (
-        <Animated.View style={animatedStyle}>
-            <PlaneIcon width={24} height={24} />
-        </Animated.View>
-    );
-};
+// --- Animated Components Removed ---
 
 export default function Home() {
+    const router = useRouter();
     const [userData, setUserData] = useState<TornUserData | null>(null);
     const [networth, setNetworth] = useState<TornNetworth | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    // Store end timestamps (ms) instead of remaining seconds for exact timing
+    const [showRentNotification, setShowRentNotification] = useState(true);
     const [cooldownEndTimes, setCooldownEndTimes] = useState({ drug: 0, booster: 0, medical: 0, jail: 0 });
     const [barEndTimes, setBarEndTimes] = useState({
         energy: 0,
@@ -102,8 +48,8 @@ export default function Home() {
         life: 0,
         chain: 0
     });
-    // Calculated remaining times (updated every second)
     const [cooldownTimers, setCooldownTimers] = useState({ drug: 0, booster: 0, medical: 0, jail: 0 });
+    const [travelTimer, setTravelTimer] = useState(0);
     const [barTimers, setBarTimers] = useState({
         energy: 0,
         nerve: 0,
@@ -114,28 +60,56 @@ export default function Home() {
     const [weeklyXanax, setWeeklyXanax] = useState(0);
     const [courseNames, setCourseNames] = useState<Record<string, string>>({});
     const [apiRequestCount, setApiRequestCount] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
+    const [activeShortcuts, setActiveShortcuts] = useState<string[]>(DEFAULT_SHORTCUTS);
+    const [isShortcutModalVisible, setIsShortcutModalVisible] = useState(false);
+
+    useEffect(() => {
+        loadShortcuts();
+    }, []);
+
+    const loadShortcuts = async () => {
+        try {
+            const stored = await SecureStore.getItemAsync("user_shortcuts");
+            if (stored) {
+                setActiveShortcuts(JSON.parse(stored));
+            }
+        } catch (e) {
+            console.error("Failed to load shortcuts", e);
+        }
+    };
+
+    const handleSaveShortcuts = async (newShortcuts: string[]) => {
+        setActiveShortcuts(newShortcuts);
+        setIsShortcutModalVisible(false);
+        try {
+            await SecureStore.setItemAsync("user_shortcuts", JSON.stringify(newShortcuts));
+        } catch (e) {
+            console.error("Failed to save shortcuts", e);
+        }
+    };
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await loadData(false);
+        setRefreshing(false);
+        setShowRentNotification(true);
+    }, []);
 
     useEffect(() => {
         loadData(true);
-
-        // Auto-refresh every 10 seconds (silent)
         const refreshInterval = setInterval(() => {
             loadData(false);
         }, 10000);
-
         return () => clearInterval(refreshInterval);
     }, []);
 
-    // Set end timestamps when userData changes
     useEffect(() => {
         if (!userData) return;
-
         const now = Date.now();
-
-        // Calculate jail end time from profile status if in jail
         let jailEndTime = 0;
         if (userData.profile?.status?.state === "Jail" && userData.profile?.status?.until) {
-            jailEndTime = userData.profile.status.until * 1000; // Convert to ms
+            jailEndTime = userData.profile.status.until * 1000;
         }
 
         setCooldownEndTimes({
@@ -154,17 +128,16 @@ export default function Home() {
         });
     }, [userData]);
 
-    // Update displayed timers every second based on end timestamps
     useEffect(() => {
         const updateTimers = () => {
             const now = Date.now();
-
             setCooldownTimers({
                 drug: Math.max(0, Math.floor((cooldownEndTimes.drug - now) / 1000)),
                 booster: Math.max(0, Math.floor((cooldownEndTimes.booster - now) / 1000)),
                 medical: Math.max(0, Math.floor((cooldownEndTimes.medical - now) / 1000)),
                 jail: Math.max(0, Math.floor((cooldownEndTimes.jail - now) / 1000)),
             });
+
 
             setBarTimers({
                 energy: Math.max(0, Math.floor((barEndTimes.energy - now) / 1000)),
@@ -173,40 +146,43 @@ export default function Home() {
                 life: Math.max(0, Math.floor((barEndTimes.life - now) / 1000)),
                 chain: Math.max(0, Math.floor((barEndTimes.chain - now) / 1000)),
             });
+
+            if (userData?.travel?.arrival_at) {
+                setTravelTimer(Math.max(0, userData.travel.arrival_at - Math.floor(now / 1000)));
+            }
         };
-
-        // Update immediately
         updateTimers();
-
-        // Then update every second
         const interval = setInterval(updateTimers, 1000);
-
         return () => clearInterval(interval);
-    }, [cooldownEndTimes, barEndTimes]);
+    }, [cooldownEndTimes, barEndTimes, userData?.travel]);
+
+    // Request push notification permissions on first load
+    useEffect(() => {
+        registerForPushNotificationsAsync();
+    }, []);
+
+    // Schedule travel notification when traveling
+    // 2. Efek untuk Menjadwalkan Ulang (Setiap data user berubah)
+    useEffect(() => {
+        if (userData) {
+            // "Jadwalkan ulang semua notifikasi berdasarkan data terbaru ini"
+            scheduleAllNotifications(userData);
+        }
+    }, [userData]);
 
     const loadData = async (showLoading = true) => {
         if (showLoading) setIsLoading(true);
         const data = await fetchUserData();
         setUserData(data);
-
-        if (data?.profile?.id) {
-            const nw = await fetchNetworth(data.profile.id);
-            setNetworth(nw);
-        }
-
-        // Fetch weekly xanax usage using API timestamp
+        const nw = await fetchNetworth();
+        setNetworth(nw);
         const weekly = await fetchWeeklyXanaxUsage();
         setWeeklyXanax(weekly);
-
-        // Fetch education courses
         const courses = await fetchEducationCourses();
         if (courses) {
             setCourseNames(courses);
         }
-
-        // Update API request count
         setApiRequestCount(getApiRequestCount());
-
         if (showLoading) setIsLoading(false);
     };
 
@@ -224,9 +200,12 @@ export default function Home() {
     const travel = userData?.travel;
     const education = userData?.education?.current;
     const totalNetworth = networth?.personalstats?.networth?.total ?? 0;
-    const walletAmount = networth?.personalstats?.networth?.wallet ?? 0;
+    // Use real-time money from money selection (v2/user/money)
+    const walletAmount = userData?.money?.wallet ?? 0;
 
-    // Calculate education time remaining
+    // Use API v1 total directly (no hybrid calculation needed)
+    const calculatedNetworth = totalNetworth;
+
     const educationTimeLeft = education ? Math.max(0, education.until - Math.floor(Date.now() / 1000)) : 0;
     const educationDays = Math.floor(educationTimeLeft / 86400);
     const educationHours = Math.floor((educationTimeLeft % 86400) / 3600);
@@ -234,82 +213,124 @@ export default function Home() {
     const educationSecs = educationTimeLeft % 60;
     const educationTimeString = `${educationDays.toString().padStart(2, '0')}:${educationHours.toString().padStart(2, '0')}:${educationMins.toString().padStart(2, '0')}:${educationSecs.toString().padStart(2, '0')}`;
 
-    // Travel progress
     const travelProgress = travel
         ? 1 - (travel.time_left / (travel.arrival_at - travel.departed_at))
         : 0;
 
-    // Determine origin city
     let originCity = "Torn City";
     if (profile?.status?.description.startsWith("Returning to Torn from ")) {
         originCity = profile.status.description.replace("Returning to Torn from ", "");
     }
 
+    // --- MAIN RENDER ---
     return (
         <SafeAreaView className="flex-1 bg-tactical-950">
             <GridPattern />
-            <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 16 }}>
+            <ScrollView
+                className="flex-1"
+                // Menggunakan Scale untuk padding konten utama
+                contentContainerStyle={{ padding: hs(16), gap: vs(16) }}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={['#F59E0B']}
+                        tintColor="#F59E0B"
+                        progressBackgroundColor="#1a1a1a"
+                    />
+                }
+            >
                 {/* Header */}
                 <View className="flex-row justify-between items-center">
                     <View>
-                        <Text className="text-white font-sans-bold text-lg">
+                        {/* Font: Inter Black agar tebal di Android */}
+                        <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>
                             Welcome back, <Text className="text-accent-yellow">{profile?.name ?? "Agent"}</Text>
                         </Text>
-                        <Text className="text-white/50 text-[10px] font-mono uppercase">
+                        <Text className="text-white/50 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10), marginTop: vs(6) }}>
                             id : {profile?.id ?? "---"} - Level {profile?.level ?? "--"}
                         </Text>
                     </View>
                     <View className="flex-row items-center gap-2">
                         <View>
-                            <Text className="uppercase rounded-[4px] p-[6px] text-accent-green font-mono text-[10px] bg-tactical-900 border border-tactical-800">API Req: {apiRequestCount}/min</Text>
+                            <Text
+                                className="uppercase rounded-[4px] text-accent-green bg-tactical-900 border border-tactical-800"
+                                style={{
+                                    fontFamily: 'JetBrainsMono_400Regular',
+                                    fontSize: ms(10),
+                                    padding: ms(6)
+                                }}
+                            >
+                                API Req: {apiRequestCount}/min
+                            </Text>
                         </View>
                     </View>
                 </View>
 
+
                 {/* Top Sections */}
-                <View className="gap-2.5">
-                    {/* Travel Card */}
-                    {travel && (
-                        <Card className="pt-4">
-                            <View className="flex-row px-4 items-center justify-between">
+                <View style={{ gap: vs(10) }}>
+                    {/* Property Rent Notifications */}
+                    {/* Logic: Show ONLY if status is 'rented' AND rental_period_remaining < 7 AND showRentNotification is true */}
+                    {userData?.property?.status === 'rented' && userData?.property?.rental_period_remaining < 7 && showRentNotification && (
+                        <View
+                            className="bg-accent-yellow/10 border border-accent-yellow/10 rounded-[8px] flex-row items-center gap-2"
+                            // Gunakan Scale helper untuk konsistensi
+                            style={{ gap: vs(10), padding: hs(10) }}
+                        >
+                            {/* Icon Alert */}
+                            <TriangleAlert color="#F59E0B" size={ms(14)} />
+
+                            {/* Text Message */}
+                            <Text
+                                className="text-accent-yellow uppercase flex-1"
+                                style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}
+                            >
+                                Property Rent Expiring in {userData.property.rental_period_remaining} days
+                            </Text>
+
+                            {/* Close Button */}
+                            <TouchableOpacity onPress={() => setShowRentNotification(false)}>
+                                <X color="#F59E0B" size={ms(14)} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* Travel Card - Only show when actively traveling */}
+                    {travel && travel.time_left > 0 && (
+                        <Card style={{ paddingTop: vs(14) }}>
+                            <View className="flex-row items-center justify-between" style={{ paddingHorizontal: hs(14) }}>
                                 <View className="flex-1">
-                                    <Text className="font-mono text-white/80 text-[10px]">
+                                    <Text className="font-mono text-white/80" style={{ fontSize: ms(10) }} numberOfLines={1}>
                                         {new Date(travel.departed_at * 1000).toLocaleTimeString('en-GB', {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            second: '2-digit',
-                                            timeZoneName: 'short'
+                                            hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
                                         })}
                                     </Text>
-                                    <Text className="text-white font-bold text-lg">
+                                    <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>
                                         {originCity}
                                     </Text>
                                 </View>
-                                <View className="flex-row items-center gap-2">
-                                    <AnimatedDot delay={0} />
-                                    <AnimatedDot delay={400} />
-                                    <AnimatedPlane delay={800} />
-                                    <AnimatedDot delay={1200} />
-                                    <AnimatedDot delay={1600} />
+                                <View className="flex-col items-center justify-center">
+                                    <TravelLoader />
+                                    <Text className="font-mono text-accent-blue" style={{ fontSize: ms(10) }} numberOfLines={1}>
+                                        {formatTimeRemaining(travelTimer)}
+                                    </Text>
                                 </View>
                                 <View className="flex-1 items-end">
-                                    <Text className="font-mono text-white/80 text-[10px]">
+                                    <Text className="font-mono text-white/80" style={{ fontSize: ms(10) }} numberOfLines={1}>
                                         {new Date(travel.arrival_at * 1000).toLocaleTimeString('en-GB', {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            second: '2-digit',
-                                            timeZoneName: 'short'
+                                            hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
                                         })}
                                     </Text>
-                                    <Text className="text-white font-bold text-lg">
+                                    <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>
                                         {travel.destination}
                                     </Text>
                                 </View>
                             </View>
-                            <View className="mt-3">
+                            <View style={{ marginTop: vs(12) }}>
                                 <ProgressBar
                                     value={travelProgress}
-                                    height={4}
+                                    height={ms(4)}
                                     trackClassName="bg-tactical-950"
                                     fillClassName="bg-accent-blue"
                                 />
@@ -318,200 +339,161 @@ export default function Home() {
                     )}
 
                     {/* KPI Section */}
-                    <View className="flex-row gap-2.5">
+                    <View className="flex-row" style={{ gap: hs(10) }}>
                         {/* Daily Profit Card */}
-                        <Card className="p-4 flex-1">
-                            <View className="gap-0">
-                                <View className="flex-row items-center gap-1">
-                                    <Feather name="trending-up" size={12} color="#F59E0B" />
-                                    <Text className="uppercase font-sans-extrabold text-xs text-accent-yellow">daily profit</Text>
+                        <Card className="flex-1" style={{ padding: ms(14) }}>
+                            <View style={{ gap: vs(0) }}>
+                                <View className="flex-row items-center" style={{ gap: hs(4) }}>
+                                    <TrendingUp size={ms(12)} color="#F59E0B" />
+                                    <Text className="uppercase font-sans-extrabold text-accent-yellow" style={{ fontSize: ms(12) }}>daily profit</Text>
                                 </View>
-                                <Text className="text-lg font-mono-extrabold text-white">--</Text>
+                                {/* Font Angka lebih tebal */}
+                                <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>--</Text>
                             </View>
-                            <View className="flex-row gap-1">
-                                <Text className="text-[10px] uppercase font-mono text-white/50">no data</Text>
+                            <View className="flex-row" style={{ gap: hs(4) }}>
+                                <Text className="uppercase font-mono text-white/50" style={{ fontSize: ms(10) }}>no data</Text>
                             </View>
                         </Card>
 
                         {/* Networth Card */}
-                        <Card className="p-4 flex-1">
-                            <View className="gap-0">
-                                <View className="flex-row items-center gap-1">
-                                    <FontAwesome5 name="coins" size={12} color="#F59E0B" />
-                                    <Text className="uppercase font-sans-extrabold text-xs text-accent-yellow">networth</Text>
+                        <Card className="flex-1" style={{ padding: ms(14) }}>
+                            <View style={{ gap: vs(0) }}>
+                                <View className="flex-row items-center" style={{ gap: hs(4) }}>
+                                    <Coins size={ms(12)} color="#F59E0B" />
+                                    <Text className="uppercase font-sans-extrabold text-accent-yellow" style={{ fontSize: ms(12) }}>networth</Text>
                                 </View>
-                                <Text className="text-lg font-mono-extrabold  text-white">{formatCurrency(totalNetworth)}</Text>
+                                <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>{formatCurrency(calculatedNetworth)}</Text>
                             </View>
-                            <Text className="text-[10px] uppercase font-mono text-white/50">Wallet {formatCurrency(walletAmount)}</Text>
+                            <Text className="uppercase font-mono text-white/50" style={{ fontSize: ms(10) }}>Wallet {formatCurrency(walletAmount)}</Text>
                         </Card>
                     </View>
                 </View>
 
                 {/* Bottom Section */}
-                <View className="gap-2.5">
+                <View style={{ gap: vs(10) }}>
                     {/* Quick Actions */}
                     <View className="flex-row justify-between items-center">
-                        <Text className="uppercase font-sans-extrabold text-sm text-white/50">quick actions</Text>
-                        <Text className="text-[10px] uppercase font-mono text-white/50">edit</Text>
+                        <Text className="uppercase font-sans-extrabold text-white/50" style={{ fontSize: ms(14) }}>quick actions</Text>
+                        <TouchableOpacity onPress={() => setIsShortcutModalVisible(true)}>
+                            <Text className="uppercase font-mono text-accent-yellow" style={{ fontSize: ms(10) }}>edit</Text>
+                        </TouchableOpacity>
                     </View>
-                    <View className="flex-row gap-2.5">
-                        <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
-                            <QaProperty width={24} height={24} />
-                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">property</Text>
-                        </Card>
-                        <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
-                            <QaCompany width={24} height={24} />
-                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">company</Text>
-                        </Card>
-                        <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
-                            <QaStats width={24} height={24} />
-                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">stats</Text>
-                        </Card>
-                        <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
-                            <QaNetworth width={24} height={24} />
-                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">networth</Text>
-                        </Card>
-                        <Card className="items-center justify-center p-2.5 flex-1 gap-1 aspect-square">
-                            <QaOthers width={24} height={24} />
-                            <Text className="text-[8px] uppercase font-sans-bold text-white/80">others</Text>
-                        </Card>
+                    <View className="flex-row" style={{ gap: hs(10) }}>
+                        {[
+                            ...activeShortcuts.map(id => AVAILABLE_SHORTCUTS.find(s => s.id === id)).filter(Boolean),
+                            { id: 'others', label: 'Others', icon: QaOthers, isSvg: true, route: '/(quick-actions)/property' as const }
+                        ].map((item, index) => {
+                            const Icon = item!.icon;
+                            return (
+                                <TouchableOpacity key={index} className="flex-1" onPress={() => router.push(item!.route)}>
+                                    <Card className="items-center justify-center flex-1 aspect-square" style={{ padding: ms(10), gap: vs(4) }}>
+                                        {item!.isSvg ? (
+                                            <Icon width={ms(24)} height={ms(24)} />
+                                        ) : (
+                                            <Icon size={ms(24)} color="rgba(255, 255, 255, 0.8)" />
+                                        )}
+                                        <Text className="uppercase font-sans-bold text-white/80" style={{ fontSize: ms(8) }}>{item!.label}</Text>
+                                    </Card>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
+
+                    <ManageShortcutsModal
+                        visible={isShortcutModalVisible}
+                        onClose={() => setIsShortcutModalVisible(false)}
+                        currentShortcuts={activeShortcuts}
+                        onSave={handleSaveShortcuts}
+                    />
 
                     {/* Status Overview */}
                     <Card>
-                        <Text className="uppercase font-sans-extrabold text-sm text-tactical-700 p-4 border-b border-tactical-800">status overview</Text>
-                        <View className="gap-2.5 p-4">
+                        <Text className="uppercase text-tactical-700 border-b border-tactical-800" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14), padding: ms(14) }}>status overview</Text>
+                        <View style={{ gap: vs(10), padding: ms(14) }}>
                             {/* ROW 1 */}
-                            <View className="flex-row gap-2.5">
+                            <View className="flex-row" style={{ gap: hs(10) }}>
                                 {/* Energy */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
-                                        <View className="flex-row items-center gap-1">
-                                            <Feather name="zap" size={10} color="#10B981" />
-                                            <Text className="text-accent-green uppercase font-extrabold text-[10px]">Energy</Text>
-                                        </View>
-                                        <View className="flex-row items-end gap-1">
-                                            <Text className="text-white text-lg font-mono-extrabold">{bars?.energy?.current ?? 0}</Text>
-                                            <Text className="text-white/50 text-[10px] pb-1 font-mono">
-                                                {barTimers.energy > 0
-                                                    ? formatTimeRemaining(barTimers.energy)
-                                                    : `/${bars?.energy?.maximum ?? 0}`}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={(bars?.energy?.current ?? 0) / (bars?.energy?.maximum || 1)}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName="bg-accent-green"
-                                        />
-                                    </View>
-                                </View>
+                                <StatusBox
+                                    icon={<Zap size={ms(10)} color="#10B981" />}
+                                    label="Energy"
+                                    labelColor="text-accent-green"
+                                    current={bars?.energy?.current ?? 0}
+                                    max={bars?.energy?.maximum ?? 0}
+                                    timer={barTimers.energy}
+                                    fillColor="bg-accent-green"
+
+                                />
                                 {/* Nerve */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
-                                        <View className="flex-row items-center gap-1">
-                                            <MaterialCommunityIcons name="brain" size={10} color="#F43F5E" />
-                                            <Text className="text-accent-red uppercase font-extrabold text-[10px]">Nerve</Text>
-                                        </View>
-                                        <View className="flex-row items-end gap-1">
-                                            <Text className="text-white text-lg font-mono-extrabold">{bars?.nerve?.current ?? 0}</Text>
-                                            <Text className="text-white/50 text-[10px] pb-1 font-mono">
-                                                {barTimers.nerve > 0
-                                                    ? formatTimeRemaining(barTimers.nerve)
-                                                    : `/${bars?.nerve?.maximum ?? 0}`}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={(bars?.nerve?.current ?? 0) / (bars?.nerve?.maximum || 1)}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName="bg-accent-red"
-                                        />
-                                    </View>
-                                </View>
+                                <StatusBox
+                                    icon={<Brain size={ms(10)} color="#F43F5E" />}
+                                    label="Nerve"
+                                    labelColor="text-accent-red"
+                                    current={bars?.nerve?.current ?? 0}
+                                    max={bars?.nerve?.maximum ?? 0}
+                                    timer={barTimers.nerve}
+                                    fillColor="bg-accent-red"
+                                />
                                 {/* Happy */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
-                                        <View className="flex-row items-center gap-1">
-                                            <Feather name="smile" size={10} color="#F59E0B" />
-                                            <Text className="text-accent-yellow uppercase font-extrabold text-[10px]">Happy</Text>
-                                        </View>
-                                        <View className="flex-row items-end gap-1">
-                                            <Text className="text-white text-lg font-mono-extrabold">{formatNumber(bars?.happy?.current ?? 0)}</Text>
-                                            <Text className="text-white/50 text-[10px] pb-1 font-mono">
-                                                {barTimers.happy > 0
-                                                    ? formatTimeRemaining(barTimers.happy)
-                                                    : `/${formatNumber(bars?.happy?.maximum ?? 0)}`}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={(bars?.happy?.current ?? 0) / (bars?.happy?.maximum || 1)}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName="bg-accent-yellow"
-                                        />
-                                    </View>
-                                </View>
+                                <StatusBox
+                                    icon={<Smile size={ms(10)} color="#F59E0B" />}
+                                    label="Happy"
+                                    labelColor="text-accent-yellow"
+                                    current={bars?.happy?.current ?? 0}
+                                    max={bars?.happy?.maximum ?? 0}
+                                    timer={barTimers.happy}
+                                    fillColor="bg-accent-yellow"
+                                />
                             </View>
                             {/* ROW 2 */}
-                            <View className="flex-row gap-2.5">
+                            <View className="flex-row" style={{ gap: hs(10) }}>
                                 {/* Life */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
-                                        <View className="flex-row items-center gap-1">
-                                            <Feather name="heart" size={10} color="#0EA5E9" />
-                                            <Text className="text-accent-blue uppercase font-extrabold text-[10px]">Life</Text>
-                                        </View>
-                                        <View className="flex-row items-end gap-1">
-                                            <Text className="text-white text-lg font-mono-extrabold">{formatNumber(bars?.life?.current ?? 0)}</Text>
-                                            <Text className="text-white/50 text-[10px] pb-1 font-mono">
-                                                {barTimers.life > 0
-                                                    ? formatTimeRemaining(barTimers.life)
-                                                    : `/${formatNumber(bars?.life?.maximum ?? 0)}`}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={(bars?.life?.current ?? 0) / (bars?.life?.maximum || 1)}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName="bg-accent-blue"
-                                        />
-                                    </View>
-                                </View>
+                                <StatusBox
+                                    icon={<Heart size={ms(10)} color="#0EA5E9" />}
+                                    label="Life"
+                                    labelColor="text-accent-blue"
+                                    current={bars?.life?.current ?? 0}
+                                    max={bars?.life?.maximum ?? 0}
+                                    timer={barTimers.life}
+                                    fillColor="bg-accent-blue"
+                                />
                                 {/* Chain */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
+                                <View className="flex-1 bg-tactical-950 border border-tactical-800 rounded-sm" style={{ paddingTop: vs(10) }}>
+                                    <View style={{ paddingHorizontal: hs(10) }}>
                                         <View className="flex-row items-center justify-between">
-                                            <View className="flex-row items-center gap-1">
-                                                <Feather name="link" size={10} color="#B720F7" />
-                                                <Text className="text-accent-purple uppercase font-extrabold text-[10px]">Chain</Text>
+                                            <View className="flex-row items-center" style={{ gap: hs(4) }}>
+                                                <Link size={ms(10)} color="#B720F7" />
+                                                <Text className="text-accent-purple uppercase" style={{ fontSize: ms(10), fontFamily: 'Inter_900Black' }}>Chain</Text>
                                             </View>
-                                            <Text className="text-white/50 text-[10px] font-mono">
-                                                {barTimers.chain > 0
-                                                    ? formatTimeRemaining(barTimers.chain)
-                                                    : ""}
+                                            <Text className="text-white/50" style={{ fontSize: ms(10), fontFamily: 'JetBrainsMono_800ExtraBold' }}>
+                                                {barTimers.chain > 0 ? formatTimeRemaining(barTimers.chain) : ""}
                                             </Text>
                                         </View>
-                                        <View className="flex-row items-end gap-1">
-                                            <Text className="text-white text-lg font-mono-extrabold">{bars?.chain?.current ?? 0}</Text>
-                                            <Text className="text-white/50 text-[10px] pb-1 font-mono">/{bars?.chain?.max ?? 0}</Text>
-                                        </View>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={barTimers.chain > 0 ? 1 : 0}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName={(bars?.chain?.current ?? 0) > 0 ? "bg-accent-purple" : "bg-tactical-800"}
-                                        />
+                                        {/* Chain Logic: Milestones 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000 */}
+                                        {(() => {
+                                            const currentChain = bars?.chain?.current ?? 0;
+                                            const CHAIN_MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+                                            const nextMilestone = CHAIN_MILESTONES.find(m => m > currentChain) || 100000;
+
+                                            // Handling edge case where current might equal a milestone momentarily before jumping
+                                            const displayMax = nextMilestone;
+
+                                            return (
+                                                <>
+                                                    <View className="flex-row items-end" style={{ gap: hs(4) }}>
+                                                        <Text className="text-white" style={{ fontSize: ms(18), fontFamily: 'JetBrainsMono_800ExtraBold' }}>{currentChain}</Text>
+                                                        <Text className="text-white/50 font-mono" style={{ fontSize: ms(10), paddingBottom: vs(4) }}>/{displayMax}</Text>
+                                                    </View>
+                                                    <View style={{ marginTop: vs(10) }}>
+                                                        <ProgressBar
+                                                            value={currentChain / displayMax}
+                                                            height={ms(4)}
+                                                            trackClassName="bg-tactical-950"
+                                                            fillClassName={currentChain > 0 ? "bg-accent-purple" : "bg-tactical-800"}
+                                                        />
+                                                    </View>
+                                                </>
+                                            );
+                                        })()}
                                     </View>
                                 </View>
                             </View>
@@ -520,110 +502,52 @@ export default function Home() {
 
                     {/* Cooldown Status */}
                     <Card>
-                        <View className="flex-row items-center justify-between p-4 border-b border-tactical-800">
-                            <Text className="uppercase font-sans-extrabold text-sm text-tactical-700">Cooldown Status</Text>
-                            <Text className="uppercase p-[6px] bg-tactical-950 border border-tactical-800 rounded-[2px] font-mono text-[10px] text-tactical-700">mon-sun: <Text className="text-accent-blue">{weeklyXanax} xanax</Text></Text>
+                        <View className="flex-row items-center justify-between border-b border-tactical-800" style={{ padding: ms(14) }}>
+                            <Text className="uppercase font-sans-extrabold text-tactical-700" style={{ fontSize: ms(14) }}>Cooldown Status</Text>
+                            <Text className="uppercase bg-tactical-950 border border-tactical-800 rounded-[2px] font-mono text-tactical-700" style={{ padding: ms(6), fontSize: ms(10) }}>
+                                mon-sun: <Text className="text-accent-blue">{weeklyXanax} xanax</Text>
+                            </Text>
                         </View>
-                        <View className="gap-2.5 p-4">
+                        <View style={{ gap: vs(10), padding: ms(14) }}>
                             {/* ROW 1 */}
-                            <View className="flex-row gap-2.5">
-                                {/* Drugs */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
-                                        <View className="flex-row items-center gap-1">
-                                            <MaterialCommunityIcons name="pill" size={10} color="rgba(255,255,255,0.5)" />
-                                            <Text className="text-white/50 uppercase font-extrabold text-[10px]">drugs</Text>
-                                        </View>
-                                        <Text className={`text-[10px] font-mono uppercase ${cooldownTimers.drug === 0 ? 'text-accent-green' : 'text-white'}`}>
-                                            {formatTimeRemaining(cooldownTimers.drug)}
-                                        </Text>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={cooldownTimers.drug === 0 ? 1 : 0.3}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName={cooldownTimers.drug === 0 ? "bg-accent-green" : "bg-accent-red"}
-                                        />
-                                    </View>
-                                </View>
-                                {/* Booster */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
-                                        <View className="flex-row items-center gap-1">
-                                            <Feather name="battery" size={10} color="rgba(255,255,255,0.5)" />
-                                            <Text className="text-white/50 uppercase font-extrabold text-[10px]">booster</Text>
-                                        </View>
-                                        <Text className={`text-[10px] font-mono uppercase ${cooldownTimers.booster === 0 ? 'text-accent-green' : 'text-white'}`}>
-                                            {formatTimeRemaining(cooldownTimers.booster)}
-                                        </Text>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={cooldownTimers.booster === 0 ? 1 : 0.3}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName={cooldownTimers.booster === 0 ? "bg-accent-green" : "bg-accent-red"}
-                                        />
-                                    </View>
-                                </View>
-                                {/* Medical */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
-                                        <View className="flex-row items-center gap-1">
-                                            <FontAwesome5 name="hospital" size={10} color="rgba(255,255,255,0.5)" />
-                                            <Text className="text-white/50 uppercase font-extrabold text-[10px]">medical</Text>
-                                        </View>
-                                        <Text className={`text-[10px] font-mono uppercase ${cooldownTimers.medical === 0 ? 'text-accent-green' : 'text-white'}`}>
-                                            {formatTimeRemaining(cooldownTimers.medical)}
-                                        </Text>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={cooldownTimers.medical === 0 ? 1 : 0.3}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName={cooldownTimers.medical === 0 ? "bg-accent-green" : "bg-accent-red"}
-                                        />
-                                    </View>
-                                </View>
-                                {/* Jail */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 pt-2.5 rounded-sm">
-                                    <View className="px-2.5">
-                                        <View className="flex-row items-center gap-1">
-                                            <FontAwesome5 name="gavel" size={10} color="rgba(255,255,255,0.5)" />
-                                            <Text className="text-white/50 uppercase font-extrabold text-[10px]">jail</Text>
-                                        </View>
-                                        <Text className={`text-[10px] font-mono uppercase ${cooldownTimers.medical === 0 ? 'text-accent-green' : 'text-white'}`}>
-                                            {formatTimeRemaining(cooldownTimers.medical)}
-                                        </Text>
-                                    </View>
-                                    <View className="mt-2.5">
-                                        <ProgressBar
-                                            value={cooldownTimers.medical === 0 ? 1 : 0.3}
-                                            height={4}
-                                            trackClassName="bg-tactical-950"
-                                            fillClassName={cooldownTimers.medical === 0 ? "bg-accent-green" : "bg-accent-red"}
-                                        />
-                                    </View>
-                                </View>
+                            <View className="flex-row" style={{ gap: hs(10) }}>
+                                <CooldownBox
+                                    icon={<Cannabis size={ms(10)} color="rgba(255,255,255,0.5)" />}
+                                    label="Drugs"
+                                    timer={cooldownTimers.drug}
+                                />
+                                <CooldownBox
+                                    icon={<BatteryCharging size={ms(10)} color="rgba(255,255,255,0.5)" />}
+                                    label="Booster"
+                                    timer={cooldownTimers.booster}
+                                />
+                                <CooldownBox
+                                    icon={<Cross size={ms(10)} color="rgba(255,255,255,0.5)" />}
+                                    label="Medical"
+                                    timer={cooldownTimers.medical}
+                                />
+                                <CooldownBox
+                                    icon={<Columns4 size={ms(10)} color="rgba(255,255,255,0.5)" />}
+                                    label="Jail"
+                                    timer={cooldownTimers.jail}
+                                />
                             </View>
+
                             {/* Education ROW */}
                             {education && (
-                                <View className="flex-row bg-tactical-950 gap-2 border items-center border-tactical-800 p-2.5 rounded-sm">
-                                    <View className="bg-tactical-950 border border-tactical-800 p-2.5 rounded-sm w-[38px] h-[38px] items-center justify-center">
-                                        <EducationIcon width={24} height={24} color="#F59E0B" />
+                                <View className="flex-row bg-tactical-950 border items-center border-tactical-800 rounded-sm" style={{ padding: ms(10), gap: hs(8) }}>
+                                    <View className="bg-tactical-950 border border-tactical-800 rounded-sm items-center justify-center" style={{ padding: ms(10), width: ms(38), height: ms(38) }}>
+                                        <EducationIcon width={ms(24)} height={ms(24)} color="#F59E0B" />
                                     </View>
-                                    <View className="flex-1 gap-1">
-                                        <Text className="text-white/50 font-mono-extrabold uppercase text-[10px]">education</Text>
-                                        <Text className="text-white font-sans-extrabold text-xs" numberOfLines={1}>
+                                    <View className="flex-1" style={{ gap: vs(4) }}>
+                                        <Text className="text-white/50 font-mono-extrabold uppercase" style={{ fontSize: ms(10) }}>education</Text>
+                                        <Text className="text-white font-sans-extrabold" style={{ fontSize: ms(12) }} numberOfLines={1}>
                                             {education.id && courseNames[education.id.toString()] ? courseNames[education.id.toString()] : `Course #${education.id}`}
                                         </Text>
-
                                     </View>
-                                    <View className="items-end gap-1">
-                                        <Text className="text-white/50 text-[10px] font-sans-extrabold uppercase">ETA</Text>
-                                        <Text className="text-accent-yellow text-xs font-mono uppercase">{educationTimeString}</Text>
+                                    <View className="items-end" style={{ gap: vs(4) }}>
+                                        <Text className="text-white/50 font-sans-extrabold uppercase" style={{ fontSize: ms(10) }}>ETA</Text>
+                                        <Text className="text-accent-yellow font-mono uppercase" style={{ fontSize: ms(12) }}>{educationTimeString}</Text>
                                     </View>
                                 </View>
                             )}
@@ -634,3 +558,55 @@ export default function Home() {
         </SafeAreaView >
     );
 }
+
+// --- Helper Components untuk mempersingkat kode dan memastikan konsistensi scale ---
+
+const StatusBox = ({ icon, label, labelColor, current, max, timer, fillColor }: any) => (
+    <View className="flex-1 bg-tactical-950 border border-tactical-800 rounded-sm" style={{ paddingTop: vs(10) }}>
+        <View style={{ paddingHorizontal: hs(10) }}>
+            <View className="flex-row items-center" style={{ gap: hs(4) }}>
+                {icon}
+                <Text className={`${labelColor} uppercase`} style={{ fontSize: ms(10), fontFamily: 'Inter_900Black' }}>{label}</Text>
+            </View>
+            <View className="flex-row items-end" style={{ gap: hs(4) }}>
+                {/* PAKAI Inter_900Black biar TEBAL */}
+                <Text className="text-white" style={{ fontSize: ms(18), fontFamily: 'JetBrainsMono_800ExtraBold' }}>
+                    {formatNumber(current)}
+                </Text>
+                <Text className="text-white/50 font-mono" style={{ fontSize: ms(10), paddingBottom: vs(4) }}>
+                    {timer > 0 ? formatTimeRemaining(timer) : `/${formatNumber(max)}`}
+                </Text>
+            </View>
+        </View>
+        <View style={{ marginTop: vs(10) }}>
+            <ProgressBar
+                value={current / (max || 1)}
+                height={ms(4)}
+                trackClassName="bg-tactical-950"
+                fillClassName={fillColor}
+            />
+        </View>
+    </View>
+);
+
+const CooldownBox = ({ icon, label, timer }: any) => (
+    <View className="flex-1 bg-tactical-950 border border-tactical-800 rounded-sm" style={{ paddingTop: vs(10) }}>
+        <View style={{ paddingHorizontal: hs(10) }}>
+            <View className="flex-row items-center" style={{ gap: hs(4) }}>
+                {icon}
+                <Text className="text-white/50 uppercase" style={{ fontSize: ms(10), fontFamily: 'Inter_900Black' }}>{label}</Text>
+            </View>
+            <Text className={`uppercase ${timer === 0 ? 'text-accent-green' : 'text-white'}`} style={{ fontSize: ms(10), fontFamily: 'JetBrainsMono_400Regular' }}>
+                {formatTimeRemaining(timer)}
+            </Text>
+        </View>
+        <View style={{ marginTop: vs(10) }}>
+            <ProgressBar
+                value={timer === 0 ? 1 : 0.3}
+                height={ms(4)}
+                trackClassName="bg-tactical-950"
+                fillClassName={timer === 0 ? "bg-accent-green" : "bg-accent-red"}
+            />
+        </View>
+    </View>
+);

@@ -20,6 +20,7 @@ import { Redirect, Stack } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
+// Tambahkan Platform di sini
 import { Platform, View } from "react-native";
 import "../global.css";
 import { GridPattern } from "../src/components/ui/grid-pattern";
@@ -44,7 +45,7 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
-    Inter_900Black,
+    Inter_900Black, // Font Tebal Anda ada di sini (AMAN)
     JetBrainsMono_400Regular,
     JetBrainsMono_700Bold,
     JetBrainsMono_800ExtraBold,
@@ -77,21 +78,41 @@ export default function RootLayout() {
   }
 
   return (
-    <View className="flex-1 bg-tactical-950">
-      <GridPattern />
-      {/* Redirect to api-key if no key is stored */}
-      {!hasApiKey && <Redirect href="/(modals)/api-key" />}
+    // 1. Container Utama: Full Screen & Center alignment
+    <View className="flex-1 bg-tactical-950 items-center justify-center">
 
-      <Stack screenOptions={{ headerShown: false }}>
-        {/* Tabs jadi root */}
-        <Stack.Screen name="(tabs)" />
+      {/* 2. Background Pattern: Biarkan memenuhi seluruh layar (Absolute) */}
+      <View style={{ position: 'absolute', width: '100%', height: '100%' }}>
+        <GridPattern />
+      </View>
 
-        {/* Modals group */}
-        <Stack.Screen
-          name="(modals)/api-key"
-          options={{ presentation: "modal" }}
-        />
-      </Stack>
+      {/* 3. Container Aplikasi: Dibatasi max 500px (TABLET SAFE) */}
+      <View
+        className="flex-1 w-full bg-tactical-950"
+        style={{
+          maxWidth: 500, // <--- INI KUNCINYA
+          width: '100%',
+          // Opsional: Beri garis pinggir tipis jika di Web/Tablet biar rapi
+          borderLeftWidth: Platform.OS === 'web' || Platform.OS === 'windows' || Platform.OS === 'macos' ? 1 : 0,
+          borderRightWidth: Platform.OS === 'web' || Platform.OS === 'windows' || Platform.OS === 'macos' ? 1 : 0,
+          borderColor: '#333',
+          overflow: 'hidden' // Agar konten tidak bocor keluar container
+        }}
+      >
+        {/* Redirect to api-key if no key is stored */}
+        {!hasApiKey && <Redirect href="/(modals)/api-key" />}
+
+        <Stack screenOptions={{ headerShown: false }}>
+          {/* Tabs jadi root */}
+          <Stack.Screen name="(tabs)" />
+
+          {/* Modals group */}
+          <Stack.Screen
+            name="(modals)/api-key"
+            options={{ presentation: "modal" }}
+          />
+        </Stack>
+      </View>
     </View>
   );
 }

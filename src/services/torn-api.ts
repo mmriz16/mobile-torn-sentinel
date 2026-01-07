@@ -55,10 +55,28 @@ export interface TornProfile {
     status: { description: string; details: string | null; state: string; color: string; until: number | null };
 }
 
+export interface TornMoney {
+    points: number;
+    wallet: number;
+    company: number;
+    vault: number;
+    cayman_bank: number;
+    city_bank: number | null;
+    faction: number | null;
+    daily_networth: number;
+}
+
+export interface TornProperty {
+    property: { id: number; name: string };
+    status: string; // 'rented', 'owned', etc.
+    rental_period_remaining: number; // Days remaining
+}
+
 export interface TornCooldowns {
     drug: number;
     medical: number;
     booster: number;
+    jail: number;
 }
 
 export interface TornEducation {
@@ -80,6 +98,8 @@ export interface TornUserData {
     cooldowns: TornCooldowns;
     education: TornEducation;
     travel: TornTravel | null;
+    money: TornMoney;
+    property: TornProperty;
 }
 
 export interface TornNetworth {
@@ -87,25 +107,34 @@ export interface TornNetworth {
         networth: {
             total: number;
             wallet: number;
+            vaults: number;
             bank: number;
+            overseas_bank: number;
             points: number;
-            cayman: number;
-            vault: number;
-            piggybank: number;
-            items: number;
-            displaycase: number;
+            inventory: number;
+            display_case: number;
             bazaar: number;
-            properties: number;
-            stockmarket: number;
-            auctionhouse: number;
-            company: number;
+            item_market: number;
+            property: number;
+            stock_market: number;
+            auction_house: number;
             bookie: number;
-            enlistedcars: number;
+            company: number;
+            enlisted_cars: number;
+            piggy_bank: number;
             pending: number;
-            unpaidfees: number;
-            loan: number;
+            loans: number;
+            unpaid_fees: number;
+            trade: number;  // Trade value
         };
     };
+}
+
+// Networth cache
+let networthCache: TornNetworth | null = null;
+
+export function getNetworthCache(): TornNetworth | null {
+    return networthCache;
 }
 
 export interface TornDrugStats {
@@ -139,7 +168,7 @@ export async function fetchDrugStats(playerId: number): Promise<TornDrugStats | 
         trackApiRequest();
         const response = await fetch(
             `${TORN_API_V2_BASE}/user/${playerId}/personalstats?cat=drugs&key=${apiKey}`,
-            { signal: controller.signal }
+            { signal: controller.signal, cache: 'no-store' }
         );
         clearTimeout(timeoutId);
 
@@ -167,9 +196,10 @@ export async function fetchUserData(): Promise<TornUserData | null> {
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         trackApiRequest();
+        trackApiRequest();
         const response = await fetch(
-            `${TORN_API_V2_BASE}/user?selections=profile,bars,cooldowns,education,travel&key=${apiKey}`,
-            { signal: controller.signal }
+            `${TORN_API_V2_BASE}/user?selections=profile,bars,cooldowns,education,travel,money,property&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
         );
         clearTimeout(timeoutId);
 
@@ -187,8 +217,8 @@ export async function fetchUserData(): Promise<TornUserData | null> {
     }
 }
 
-// Fetch networth data
-export async function fetchNetworth(playerId: number): Promise<TornNetworth | null> {
+// Fetch networth data using API v1 (may have different cache timing)
+export async function fetchNetworth(): Promise<TornNetworth | null> {
     try {
         const apiKey = await getApiKey();
         if (!apiKey) return null;
@@ -197,9 +227,10 @@ export async function fetchNetworth(playerId: number): Promise<TornNetworth | nu
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         trackApiRequest();
+        // Using API v1 user/networth instead of v2 personalstats
         const response = await fetch(
-            `${TORN_API_V2_BASE}/user/${playerId}/personalstats?cat=networth&key=${apiKey}`,
-            { signal: controller.signal }
+            `https://api.torn.com/user/?selections=networth&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
         );
         clearTimeout(timeoutId);
 
@@ -210,7 +241,42 @@ export async function fetchNetworth(playerId: number): Promise<TornNetworth | nu
             return null;
         }
 
-        return data as TornNetworth;
+        // Transform v1 response to match our TornNetworth interface
+        // v1 returns: { networth: { ... }, timestamp: ... }
+        // We need: { personalstats: { networth: { ... } } }
+        if (data.networth) {
+            const transformed: TornNetworth = {
+                personalstats: {
+                    networth: {
+                        total: data.networth.total || 0,
+                        wallet: data.networth.wallet || 0,
+                        vaults: data.networth.vault || 0,  // v1 uses 'vault', not 'vaults'
+                        bank: data.networth.bank || 0,
+                        overseas_bank: data.networth.cayman || 0,
+                        points: data.networth.points || 0,
+                        inventory: data.networth.items || 0,  // v1 uses 'items', not 'inventory'
+                        display_case: data.networth.displaycase || 0,
+                        bazaar: data.networth.bazaar || 0,
+                        item_market: data.networth.itemmarket || 0,
+                        property: data.networth.properties || 0,  // v1 uses 'properties', not 'property'
+                        stock_market: data.networth.stockmarket || 0,
+                        auction_house: data.networth.auctionhouse || 0,
+                        bookie: data.networth.bookie || 0,
+                        company: data.networth.company || 0,
+                        enlisted_cars: data.networth.enlistedcars || 0,
+                        piggy_bank: data.networth.piggybank || 0,
+                        pending: data.networth.pending || 0,
+                        loans: data.networth.loan || 0,
+                        unpaid_fees: data.networth.unpaidfees || 0,
+                        trade: data.networth.trade || 0,
+                    }
+                }
+            };
+            networthCache = transformed;
+            return transformed;
+        }
+
+        return null;
     } catch (error) {
         console.error("Failed to fetch networth:", error);
         return null;
@@ -267,7 +333,7 @@ async function fetchXanaxAtTimestamp(timestamp?: number): Promise<number | null>
         }
 
         trackApiRequest();
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await fetch(url, { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timeoutId);
 
         const data = await response.json();
@@ -316,7 +382,7 @@ export async function fetchEducationCourses(): Promise<Record<string, string> | 
         trackApiRequest();
         const response = await fetch(
             `${TORN_API_V2_BASE}/torn?selections=education&key=${apiKey}`,
-            { signal: controller.signal }
+            { signal: controller.signal, cache: 'no-store' }
         );
         clearTimeout(timeoutId);
 
@@ -327,29 +393,23 @@ export async function fetchEducationCourses(): Promise<Record<string, string> | 
             return null;
         }
 
-        // Transform to ID -> Name map using recursive extraction
-        // to handle POTENTIAL nested structure (e.g. Categories -> Courses)
+        // Transform to ID -> "Category: Course Name" map
         const courses: Record<string, string> = {};
 
-        const extractCourses = (obj: any) => {
-            if (!obj || typeof obj !== 'object') return;
-
-            // Check if this object is a course (has id and name/title)
-            // We ensure 'id' is present. 'title' or 'name' is the label.
-            if (obj.id && (obj.title || obj.name)) {
-                courses[String(obj.id)] = obj.title || obj.name;
-            }
-
-            // Recurse into children
-            Object.values(obj).forEach(value => {
-                if (typeof value === 'object') {
-                    extractCourses(value);
+        if (data.education && Array.isArray(data.education)) {
+            // New structure: education[] is an array of categories
+            // Each category has: id, name (category name), courses[]
+            // Each course has: id, name (course name)
+            for (const category of data.education) {
+                const categoryName = category.name || 'Unknown';
+                if (category.courses && Array.isArray(category.courses)) {
+                    for (const course of category.courses) {
+                        if (course.id && course.name) {
+                            courses[String(course.id)] = `${categoryName}: ${course.name}`;
+                        }
+                    }
                 }
-            });
-        };
-
-        if (data.education) {
-            extractCourses(data.education);
+            }
         }
 
         educationCoursesCache = courses;

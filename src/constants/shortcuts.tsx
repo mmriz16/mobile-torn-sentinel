@@ -1,10 +1,6 @@
-import { Bell, Flag, Settings, ShoppingBag } from 'lucide-react-native';
+import { Bell, Coins, Dumbbell, FileUser, Flag, LandPlot, Settings, ShoppingBag } from 'lucide-react-native';
 
 // Import local SVGs
-import QaCompany from '../../assets/icons/qa-company.svg';
-import QaNetworth from '../../assets/icons/qa-networth.svg';
-import QaProperty from '../../assets/icons/qa-property.svg';
-import QaStats from '../../assets/icons/qa-stats.svg';
 
 export interface ShortcutItem {
     id: string;
@@ -18,29 +14,29 @@ export const AVAILABLE_SHORTCUTS: ShortcutItem[] = [
     {
         id: 'property',
         label: 'Property',
-        icon: QaProperty,
-        isSvg: true,
+        icon: LandPlot,
+        isSvg: false,
         route: '/(quick-actions)/property'
     },
     {
-        id: 'company',
-        label: 'Company',
-        icon: QaCompany,
-        isSvg: true,
-        route: '/(quick-actions)/company'
+        id: 'gym',
+        label: 'Gym',
+        icon: Dumbbell,
+        isSvg: false,
+        route: '/(quick-actions)/gym'
     },
     {
         id: 'stats',
         label: 'Stats',
-        icon: QaStats,
-        isSvg: true,
+        icon: FileUser,
+        isSvg: false,
         route: '/(quick-actions)/stats'
     },
     {
         id: 'networth',
         label: 'Networth',
-        icon: QaNetworth,
-        isSvg: true,
+        icon: Coins,
+        isSvg: false,
         route: '/(quick-actions)/networth'
     },
     // New items using Lucide icons
@@ -49,29 +45,29 @@ export const AVAILABLE_SHORTCUTS: ShortcutItem[] = [
         label: 'Market',
         icon: ShoppingBag,
         isSvg: false,
-        route: '/(quick-actions)/property' // Placeholder
+        route: '/(quick-actions)/market' // Placeholder
     },
     {
         id: 'faction',
         label: 'Faction',
         icon: Flag,
         isSvg: false,
-        route: '/(quick-actions)/property' // Placeholder
+        route: '/(quick-actions)/faction' // Placeholder
     },
     {
         id: 'alerts',
         label: 'Alerts',
         icon: Bell,
         isSvg: false,
-        route: '/(quick-actions)/property' // Placeholder
+        route: '/(quick-actions)/alerts' // Placeholder
     },
     {
         id: 'settings',
         label: 'Settings',
         icon: Settings,
         isSvg: false,
-        route: '/(quick-actions)/property' // Placeholder
+        route: '/(quick-actions)/settings' // Placeholder
     }
 ];
 
-export const DEFAULT_SHORTCUTS = ['property', 'company', 'stats', 'networth'];
+export const DEFAULT_SHORTCUTS = ['property', 'gym', 'stats', 'networth'];

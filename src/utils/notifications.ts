@@ -1,139 +1,175 @@
 import * as Notifications from 'expo-notifications';
-import { TornUserData } from '../services/torn-api';
+import { Platform } from 'react-native';
 
-// Konfigurasi agar notifikasi muncul saat aplikasi dibuka
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-    }),
-});
-
-export async function registerForPushNotificationsAsync() {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-    }
-    return finalStatus === 'granted';
+// Definisi Tipe Data yang kompatibel dengan TornUserData dari torn-api.ts
+interface TornData {
+    travel?: {
+        time_left: number;
+        destination: string;
+        departed_at?: number;
+        arrival_at?: number;
+    } | null;
+    bars?: {
+        energy?: { full_time?: number; current?: number; maximum?: number };
+        nerve?: { full_time?: number; current?: number; maximum?: number };
+        life?: { full_time?: number; current?: number; maximum?: number };
+        happy?: { current?: number; maximum?: number; full_time?: number };
+        chain?: { current?: number; max?: number; timeout?: number };
+    };
+    cooldowns?: { drug?: number; booster?: number; medical?: number };
+    profile?: { status?: { state?: string; until?: number | null } };
+    education?: { current?: { id?: number; until?: number } | null };
 }
 
-// Helper untuk menjadwalkan notifikasi
+// Konfigurasi Notifikasi (Foreground) - Only set on native platforms
+if (Platform.OS !== 'web') {
+    Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+            shouldShowAlert: true,
+            shouldPlaySound: true,
+            shouldSetBadge: false,
+            shouldShowBanner: true,
+            shouldShowList: true,
+        }),
+    });
+}
+
+// Helper: Jadwalkan Notifikasi
 async function scheduleItem(title: string, body: string, triggerSeconds: number) {
-    // Hanya jadwalkan jika waktunya di masa depan (lebih dari 0 detik)
-    if (triggerSeconds > 0) {
+    if (triggerSeconds > 1) { // Hanya jadwalkan jika waktu > 1 detik
         await Notifications.scheduleNotificationAsync({
-            content: { title, body, sound: true },
+            content: { title, body, sound: 'default' },
             trigger: {
                 seconds: triggerSeconds,
-                type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL
+                type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL // Memastikan tipe trigger benar
             },
         });
     }
 }
 
-// --- FUNGSI UTAMA: JADWALKAN SEMUANYA ---
-export async function scheduleAllNotifications(userData: TornUserData) {
-    // 1. Reset semua jadwal lama
+// --- FUNGSI UTAMA ---
+export async function scheduleAllNotifications(data: TornData) {
+    // Skip on web - expo-notifications scheduling is not supported
+    if (Platform.OS === 'web') {
+        console.log('⚠️ Notifications not supported on web platform');
+        return;
+    }
+
+    // 1. Bersihkan jadwal lama agar tidak duplikat
     await Notifications.cancelAllScheduledNotificationsAsync();
 
-    const now = Date.now() / 1000; // Waktu sekarang (Unix timestamp detik)
+    const now = Math.floor(Date.now() / 1000); // Waktu sekarang (detik)
 
-    // --- A. TRAVEL (2 Menit Sebelum Sampai) ---
-    if (userData.travel && userData.travel.time_left > 0) {
-        const secondsLeft = userData.travel.arrival_at - now;
-        const warningTrigger = secondsLeft - 120; // 2 menit sebelum
+    // --- A. TRAVEL (Landing) ---
+    // API travel.time_left adalah detik sisa. Langsung pakai itu saja lebih aman.
+    if (data.travel && data.travel.time_left > 0) {
+        const timeLeft = data.travel.time_left;
 
-        if (warningTrigger > 0) {
+        // Notif 1: Persiapan Mendarat (2 menit sebelum)
+        if (timeLeft > 120) {
             await scheduleItem(
-                "✈️ Preparing for Landing",
-                `You will arrive in ${userData.travel.destination} in 2 minutes!`,
-                warningTrigger
+                "✈️ 2 Minutes to Landing!",
+                `Prepare to land in ${data.travel.destination}.`,
+                timeLeft - 120
             );
-        } else if (secondsLeft > 0) {
-            await scheduleItem("🛬 Arrived!", `Welcome to ${userData.travel.destination}`, secondsLeft);
+        }
+
+        // Notif 2: Pas Mendarat
+        await scheduleItem(
+            "🛬 Arrived!",
+            `Welcome to ${data.travel.destination}! Check stock now!`,
+            timeLeft
+        );
+    }
+
+    // --- B. BARS (Energy, Nerve, Life) ---
+    // API v2 menggunakan 'full_time' (dengan underscore)
+
+    // ⚡ Energy
+    const energyFullTime = data.bars?.energy?.full_time ?? 0;
+    if (energyFullTime > 0) {
+        const secondsLeft = energyFullTime - now;
+        if (secondsLeft > 0) {
+            await scheduleItem("⚡ Energy Full", "Energy is 100%. Train or War!", secondsLeft);
         }
     }
 
-    // --- B. BARS (Energy, Nerve, Happy, Life) ---
-    if (userData.bars) {
-        // ⚡ Energy Full
-        if (userData.bars.energy.full_time > now) {
-            await scheduleItem(
-                "⚡ Energy Full",
-                "Your Energy bar is fully restored!",
-                userData.bars.energy.full_time - now
-            );
-        }
-
-        // 🧠 Nerve Full
-        if (userData.bars.nerve.full_time > now) {
-            await scheduleItem(
-                "🧠 Nerve Full",
-                "Your Nerve bar is ready for crimes!",
-                userData.bars.nerve.full_time - now
-            );
-        }
-
-        // 😄 Happy Full (BARU)
-        if (userData.bars.happy.full_time > now) {
-            await scheduleItem(
-                "😄 Happy Full",
-                "Your Happiness is fully restored! Time to train?",
-                userData.bars.happy.full_time - now
-            );
-        }
-
-        // ❤️ Life Full (BARU)
-        if (userData.bars.life.full_time > now) {
-            await scheduleItem(
-                "❤️ Life Full",
-                "Your Life is fully restored!",
-                userData.bars.life.full_time - now
-            );
+    // 🧠 Nerve
+    const nerveFullTime = data.bars?.nerve?.full_time ?? 0;
+    if (nerveFullTime > 0) {
+        const secondsLeft = nerveFullTime - now;
+        if (secondsLeft > 0) {
+            await scheduleItem("🧠 Nerve Full", "Ready for crimes!", secondsLeft);
         }
     }
 
-    // --- C. COOLDOWNS (Drug, Booster, Medical, Jail) ---
-    if (userData.cooldowns) {
-        // 💊 Drug Ready
-        if (userData.cooldowns.drug > 0) {
-            await scheduleItem("💊 Drug Cooldown Ended", "You can take another Xanax now.", userData.cooldowns.drug);
+    // ❤️ Life
+    const lifeFullTime = data.bars?.life?.full_time ?? 0;
+    if (lifeFullTime > 0) {
+        const secondsLeft = lifeFullTime - now;
+        if (secondsLeft > 0) {
+            await scheduleItem("❤️ Life Full", "Health fully restored.", secondsLeft);
         }
+    }
 
-        // 🍬 Booster Ready
-        if (userData.cooldowns.booster > 0) {
-            await scheduleItem("🍬 Booster Cooldown Ended", "Ready to eat more candy!", userData.cooldowns.booster);
+    // 😄 Happy (Manual Logic)
+    // Happy reset setiap :00, :15, :30, :45. Kita hitung detik menuju kelipatan 15 menit terdekat.
+    const date = new Date();
+    const minutes = date.getMinutes();
+    const seconds = date.getSeconds();
+    let nextTickSeconds = ((15 - (minutes % 15)) * 60) - seconds;
+    if (nextTickSeconds <= 0) nextTickSeconds += 900; // Koreksi jika negatif
+
+    await scheduleItem("😄 Happy Reset", "Happy bar just ticked.", nextTickSeconds);
+
+    // --- C. COOLDOWNS ---
+
+    // 💊 Drug
+    const drugCooldown = data.cooldowns?.drug ?? 0;
+    if (drugCooldown > 0) {
+        await scheduleItem("💊 Drug Ready", "Drug cooldown ended. Pop a Xanax?", drugCooldown);
+    }
+
+    // 🍬 Booster
+    const boosterCooldown = data.cooldowns?.booster ?? 0;
+    if (boosterCooldown > 0) {
+        await scheduleItem("🍬 Booster Ready", "Can eat more candy/cans now.", boosterCooldown);
+    }
+
+    // 🏥 Hospital - Ambil dari profile.status jika state = "Hospital"
+    if (data.profile?.status?.state === "Hospital" && data.profile.status.until) {
+        const secondsLeft = data.profile.status.until - now;
+        if (secondsLeft > 0) {
+            await scheduleItem("🏥 Out of Hospital", "You are healthy again.", secondsLeft);
         }
+    }
 
-        // 🏥 Medical Ended
-        if (userData.cooldowns.medical > 0) {
-            await scheduleItem("🏥 Hospital Timer Ended", "You are out of the hospital.", userData.cooldowns.medical);
-        }
-
-        // ⚖️ Jail Ended (BARU)
-        if (userData.cooldowns.jail > 0) {
-            await scheduleItem("⚖️ Free from Jail!", "You have been released from jail.", userData.cooldowns.jail);
+    // ⚖️ Jail - Ambil dari profile.status jika state = "Jail"
+    if (data.profile?.status?.state === "Jail" && data.profile.status.until) {
+        const secondsLeft = data.profile.status.until - now;
+        if (secondsLeft > 0) {
+            await scheduleItem("⚖️ Free from Jail", "You are released from jail.", secondsLeft);
         }
     }
 
     // --- D. EDUCATION ---
-    if (userData.education?.current) {
-        const secondsLeft = userData.education.current.until - now;
+    const educationUntil = data.education?.current?.until ?? 0;
+    if (educationUntil > 0) {
+        const secondsLeft = educationUntil - now;
         if (secondsLeft > 0) {
-            await scheduleItem("🎓 Education Complete", "You have finished your course!", secondsLeft);
+            await scheduleItem("🎓 Education Complete", "Course finished!", secondsLeft);
         }
     }
 
-    // --- E. CHAIN (Warning System) ---
-    if (userData.bars?.chain?.timeout && userData.bars.chain.timeout > 0) {
-        const warningTime = userData.bars.chain.timeout - 90; // 90 detik sebelum putus
+    // --- E. CHAIN ---
+    const chainTimeout = data.bars?.chain?.timeout ?? 0;
+    if (chainTimeout > 0) {
+        // Ingatkan 90 detik sebelum putus
+        const warningTime = chainTimeout - 90;
         if (warningTime > 0) {
-            await scheduleItem("🔗 Chain Warning!", "Your chain will break in 90 seconds!", warningTime);
+            await scheduleItem("🔗 Chain Warning!", "Chain breaks in 90s!", warningTime);
         }
     }
+
+    console.log(`✅ ${new Date().toLocaleTimeString()}: All notifications scheduled.`);
 }

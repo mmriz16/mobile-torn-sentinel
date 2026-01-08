@@ -1,6 +1,8 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
+import { TornItem } from "../types/item";
+
 const TORN_API_V2_BASE = "https://api.torn.com/v2";
 
 // API Request Tracking
@@ -419,4 +421,305 @@ export async function fetchEducationCourses(): Promise<Record<string, string> | 
         console.error("Failed to fetch education courses:", error);
         return null;
     }
+}
+
+// Battle Stats types and fetch function
+export interface TornBattleStats {
+    strength: number;
+    defense: number;
+    speed: number;
+    dexterity: number;
+    total: number;
+}
+
+export async function fetchBattleStats(): Promise<TornBattleStats | null> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) {
+            console.error("No API key found");
+            return null;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        trackApiRequest();
+        const response = await fetch(
+            `${TORN_API_V2_BASE}/user/battlestats?key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+        console.log("Battle stats raw response:", JSON.stringify(data));
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        // Handle nested structure from API v2
+        // API returns: { battlestats: { strength: { value, modifier, modifiers }, ... , total } }
+        const stats = data.battlestats || data;
+
+        return {
+            strength: stats.strength?.value || stats.strength || 0,
+            defense: stats.defense?.value || stats.defense || 0,
+            speed: stats.speed?.value || stats.speed || 0,
+            dexterity: stats.dexterity?.value || stats.dexterity || 0,
+            total: stats.total || 0
+        } as TornBattleStats;
+    } catch (error) {
+        console.error("Failed to fetch battle stats:", error);
+        return null;
+    }
+}
+
+// Fetch active gym ID
+export async function fetchActiveGym(): Promise<number | null> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        trackApiRequest();
+        // Using API v1 with gym selection
+        const response = await fetch(
+            `https://api.torn.com/user/?selections=gym&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        return data.active_gym || null;
+    } catch (error) {
+        console.error("Failed to fetch active gym:", error);
+        return null;
+    }
+}
+
+// Perks interface
+export interface TornPerks {
+    faction_perks: string[];
+    job_perks: string[];
+    property_perks: string[];
+    education_perks: string[];
+    enhancer_perks: string[];
+    book_perks: string[];
+    stock_perks: string[];
+    merit_perks: string[];
+}
+
+/**
+ * Parse gym gains percentage from perk string.
+ * Examples: "+ 2% gym gains", "+ 3% gym gains"
+ * Returns the percentage as decimal (e.g., 0.02 for 2%)
+ */
+function parseGymGainsPerk(perk: string): number {
+    const match = perk.match(/\+\s*(\d+(?:\.\d+)?)\s*%\s*gym\s*gains/i);
+    if (match) {
+        return parseFloat(match[1]) / 100;
+    }
+    return 0;
+}
+
+/**
+ * Fetch all perks and calculate total gym gains modifier.
+ * Returns the modifier M (e.g., 1.02 for 2% bonus)
+ */
+export async function fetchGymModifier(): Promise<number> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return 1;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        trackApiRequest();
+        const response = await fetch(
+            `https://api.torn.com/user/?selections=&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return 1;
+        }
+
+        // Collect all perks arrays
+        const allPerks: string[] = [
+            ...(data.faction_perks || []),
+            ...(data.job_perks || []),
+            ...(data.property_perks || []),
+            ...(data.education_perks || []),
+            ...(data.enhancer_perks || []),
+            ...(data.book_perks || []),
+            ...(data.stock_perks || []),
+            ...(data.merit_perks || []),
+        ];
+
+        // Parse gym gains percentages and calculate modifier
+        // Using multiplication: M = (1 + p1) * (1 + p2) * ...
+        let modifier = 1;
+        for (const perk of allPerks) {
+            const gymGains = parseGymGainsPerk(perk);
+            if (gymGains > 0) {
+                modifier *= (1 + gymGains);
+            }
+        }
+
+        return modifier;
+    } catch (error) {
+        console.error("Failed to fetch perks:", error);
+        return 1;
+    }
+}
+
+// Item details interface
+export interface TornItemEffect {
+    effect: string;
+    value: number;
+}
+
+export type { TornItem };
+
+// Item market listing
+export interface ItemMarketListing {
+    cost: number;
+    quantity: number;
+}
+
+/**
+ * Fetch item details from Torn API (for effects)
+ * Returns a map of itemId -> item details
+ */
+export async function fetchItemDetails(itemIds: number[]): Promise<Record<number, TornItem>> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return {};
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        trackApiRequest();
+        const response = await fetch(
+            `https://api.torn.com/torn/?selections=items&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return {};
+        }
+
+        // Filter to only requested item IDs
+        const items: Record<number, TornItem> = {};
+        if (data.items) {
+            for (const itemId of itemIds) {
+                const item = data.items[String(itemId)];
+                if (item) {
+                    items[itemId] = {
+                        id: itemId,
+                        name: item.name,
+                        description: item.description,
+                        type: item.type,
+                        market_value: item.market_value,
+                        buy_price: item.buy_price || 0,
+                        image_url: item.image || '',
+                        stats: {
+                            effect: item.effect,
+                            damage: item.damage,
+                            accuracy: item.accuracy,
+                            armor_rating: item.armor,
+                            requirement: item.requirement,
+                            coverage: item.coverage
+                        }
+                    };
+                }
+            }
+        }
+
+        return items;
+    } catch (error) {
+        console.error("Failed to fetch item details:", error);
+        return {};
+    }
+}
+
+/**
+ * Fetch lowest market price for a single item
+ */
+async function fetchSingleItemMarketPrice(itemId: number): Promise<number | null> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        trackApiRequest();
+        const url = `${TORN_API_V2_BASE}/market/${itemId}/itemmarket?key=${apiKey}`;
+
+        const response = await fetch(
+            url,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+        const listings = data?.itemmarket?.listings || [];
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        // Get lowest price from listings
+        if (listings.length > 0) {
+            // Sort by price and return lowest
+            // Note: API v2 uses 'price' instead of 'cost' in listings
+            const sorted = listings.sort((a: any, b: any) => a.price - b.price);
+            const lowestPrice = sorted[0].price;
+            console.log(`Lowest price for ${itemId}:`, lowestPrice);
+            return lowestPrice;
+        }
+
+        return null;
+    } catch (error) {
+        console.error(`Failed to fetch market price for item ${itemId}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Fetch lowest market prices for multiple items
+ * Returns a map of itemId -> lowest price
+ */
+export async function fetchItemMarketPrices(itemIds: number[]): Promise<Record<number, number>> {
+    const prices: Record<number, number> = {};
+
+    // Fetch prices in parallel
+    const pricePromises = itemIds.map(async (itemId) => {
+        const price = await fetchSingleItemMarketPrice(itemId);
+        if (price !== null) {
+            prices[itemId] = price;
+        }
+    });
+
+    await Promise.all(pricePromises);
+    return prices;
 }

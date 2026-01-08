@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ManageShortcutsModal } from "../../src/components/modals/manage-shortcuts-modal";
 import { Card } from "../../src/components/ui/card";
@@ -9,8 +9,8 @@ import { GridPattern } from "../../src/components/ui/grid-pattern";
 import { ProgressBar } from "../../src/components/ui/progress-bar";
 import TravelLoader from "../../src/components/ui/travel-loader";
 import { AVAILABLE_SHORTCUTS, DEFAULT_SHORTCUTS } from "../../src/constants/shortcuts";
-import { registerForPushNotificationsAsync, scheduleAllNotifications } from '../../src/utils/notifications';
 
+import { syncNetworthAndGetProfit } from "../../src/services/profit-tracker";
 import {
     fetchEducationCourses,
     fetchNetworth,
@@ -30,7 +30,7 @@ import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from 
 import EducationIcon from '../../assets/icons/education.svg';
 import QaOthers from '../../assets/icons/qa-others.svg';
 
-import { BatteryCharging, Brain, Cannabis, Coins, Columns4, Cross, Heart, Link, Smile, TrendingUp, TriangleAlert, X, Zap } from 'lucide-react-native';
+import { BatteryCharging, Bell, Brain, Cannabis, Coins, Columns4, Cross, Heart, Link, Smile, TrendingUp, TriangleAlert, X, Zap } from 'lucide-react-native';
 
 // --- Animated Components Removed ---
 
@@ -40,6 +40,7 @@ export default function Home() {
     const [networth, setNetworth] = useState<TornNetworth | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [showRentNotification, setShowRentNotification] = useState(true);
+    const [dailyProfit, setDailyProfit] = useState(0);
     const [cooldownEndTimes, setCooldownEndTimes] = useState({ drug: 0, booster: 0, medical: 0, jail: 0 });
     const [barEndTimes, setBarEndTimes] = useState({
         energy: 0,
@@ -70,7 +71,12 @@ export default function Home() {
 
     const loadShortcuts = async () => {
         try {
-            const stored = await SecureStore.getItemAsync("user_shortcuts");
+            let stored: string | null = null;
+            if (Platform.OS === "web") {
+                stored = localStorage.getItem("user_shortcuts");
+            } else {
+                stored = await SecureStore.getItemAsync("user_shortcuts");
+            }
             if (stored) {
                 setActiveShortcuts(JSON.parse(stored));
             }
@@ -83,7 +89,11 @@ export default function Home() {
         setActiveShortcuts(newShortcuts);
         setIsShortcutModalVisible(false);
         try {
-            await SecureStore.setItemAsync("user_shortcuts", JSON.stringify(newShortcuts));
+            if (Platform.OS === "web") {
+                localStorage.setItem("user_shortcuts", JSON.stringify(newShortcuts));
+            } else {
+                await SecureStore.setItemAsync("user_shortcuts", JSON.stringify(newShortcuts));
+            }
         } catch (e) {
             console.error("Failed to save shortcuts", e);
         }
@@ -156,19 +166,7 @@ export default function Home() {
         return () => clearInterval(interval);
     }, [cooldownEndTimes, barEndTimes, userData?.travel]);
 
-    // Request push notification permissions on first load
-    useEffect(() => {
-        registerForPushNotificationsAsync();
-    }, []);
 
-    // Schedule travel notification when traveling
-    // 2. Efek untuk Menjadwalkan Ulang (Setiap data user berubah)
-    useEffect(() => {
-        if (userData) {
-            // "Jadwalkan ulang semua notifikasi berdasarkan data terbaru ini"
-            scheduleAllNotifications(userData);
-        }
-    }, [userData]);
 
     const loadData = async (showLoading = true) => {
         if (showLoading) setIsLoading(true);
@@ -176,6 +174,15 @@ export default function Home() {
         setUserData(data);
         const nw = await fetchNetworth();
         setNetworth(nw);
+
+        if (data?.profile?.id && nw?.personalstats?.networth?.total) {
+            const profitAngka = await syncNetworthAndGetProfit(
+                data.profile.id,
+                nw.personalstats.networth.total
+            );
+            setDailyProfit(profitAngka);
+        }
+
         const weekly = await fetchWeeklyXanaxUsage();
         setWeeklyXanax(weekly);
         const courses = await fetchEducationCourses();
@@ -203,8 +210,7 @@ export default function Home() {
     // Use real-time money from money selection (v2/user/money)
     const walletAmount = userData?.money?.wallet ?? 0;
 
-    // Use API v1 total directly (no hybrid calculation needed)
-    const calculatedNetworth = totalNetworth;
+
 
     const educationTimeLeft = education ? Math.max(0, education.until - Math.floor(Date.now() / 1000)) : 0;
     const educationDays = Math.floor(educationTimeLeft / 86400);
@@ -263,6 +269,9 @@ export default function Home() {
                             >
                                 API Req: {apiRequestCount}/min
                             </Text>
+                        </View>
+                        <View className="p-2 bg-tactical-900 rounded-full">
+                            <Bell size={ms(18)} color="rgba(255,255,255,0.8)" />
                         </View>
                     </View>
                 </View>
@@ -348,10 +357,10 @@ export default function Home() {
                                     <Text className="uppercase font-sans-extrabold text-accent-yellow" style={{ fontSize: ms(12) }}>daily profit</Text>
                                 </View>
                                 {/* Font Angka lebih tebal */}
-                                <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>--</Text>
+                                <Text className="text-white" style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(18) }}>{formatCurrency(dailyProfit)}</Text>
                             </View>
                             <View className="flex-row" style={{ gap: hs(4) }}>
-                                <Text className="uppercase font-mono text-white/50" style={{ fontSize: ms(10) }}>no data</Text>
+                                <Text className="uppercase font-mono text-white/50" style={{ fontSize: ms(10) }}>calculated</Text>
                             </View>
                         </Card>
 
@@ -362,7 +371,7 @@ export default function Home() {
                                     <Coins size={ms(12)} color="#F59E0B" />
                                     <Text className="uppercase font-sans-extrabold text-accent-yellow" style={{ fontSize: ms(12) }}>networth</Text>
                                 </View>
-                                <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>{formatCurrency(calculatedNetworth)}</Text>
+                                <Text className="text-white" style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(18) }}>{formatCurrency(totalNetworth)}</Text>
                             </View>
                             <Text className="uppercase font-mono text-white/50" style={{ fontSize: ms(10) }}>Wallet {formatCurrency(walletAmount)}</Text>
                         </Card>

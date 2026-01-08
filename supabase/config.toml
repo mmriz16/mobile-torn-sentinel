@@ -1,0 +1,44 @@
+
+[functions.war-watcher]
+enabled = true
+verify_jwt = true
+import_map = "./functions/war-watcher/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/war-watcher/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/war-watcher/*.html" ]
+
+[functions.status-watcher]
+enabled = true
+verify_jwt = true
+import_map = "./functions/status-watcher/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/status-watcher/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/status-watcher/*.html" ]
+
+[functions.daily-networth]
+enabled = true
+verify_jwt = true
+import_map = "./functions/daily-networth/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/daily-networth/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/daily-networth/*.html" ]
+
+[functions.sync-items]
+enabled = true
+verify_jwt = true
+import_map = "./functions/sync-items/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/sync-items/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/sync-items/*.html" ]

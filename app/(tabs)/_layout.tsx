@@ -1,10 +1,10 @@
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AlertsIcon from "../../assets/icons/alerts.svg";
-import AssetsIcon from "../../assets/icons/assets.svg";
-import HomeIcon from "../../assets/icons/home.svg";
-import MarketIcon from "../../assets/icons/market.svg";
-import ProfitIcon from "../../assets/icons/profit.svg";
+import AssetsIcon from "../../assets/icons/nav-assets.svg";
+import HomeIcon from "../../assets/icons/nav-home.svg";
+import MarketIcon from "../../assets/icons/nav-market.svg";
+import ProfitIcon from "../../assets/icons/nav-profit.svg";
+import SettingsIcon from "../../assets/icons/nav-settings.svg";
 
 export default function TabsLayout() {
     const insets = useSafeAreaInsets();
@@ -67,10 +67,10 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
-                name="alerts"
+                name="settings"
                 options={{
-                    title: "Alerts",
-                    tabBarIcon: ({ color }) => <AlertsIcon color={color} width={24} height={24} />,
+                    title: "Settings",
+                    tabBarIcon: ({ color }) => <SettingsIcon color={color} width={24} height={24} />,
                 }}
             />
         </Tabs>

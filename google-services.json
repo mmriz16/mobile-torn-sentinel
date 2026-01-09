@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "542377966058",
+    "project_id": "torn-sentinel",
+    "storage_bucket": "torn-sentinel.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:542377966058:android:96d8909ca16bbc90675a93",
+        "android_client_info": {
+          "package_name": "com.kaozi.tornsentinel"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAD-5gGMiyxTwE3iTyB5_QG5pt98ESTQ-w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

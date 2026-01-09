@@ -31,7 +31,15 @@ export async function fetchItemDetailsFromSupabase(itemIds: number[]): Promise<R
                     market_value: item.market_value,
                     buy_price: item.buy_price || 0,
                     image_url: item.image_url || '',
-                    stats: item.stats || {}
+
+                    // Flattened fields from database (no longer nested in stats)
+                    damage: item.damage ?? null,
+                    accuracy: item.accuracy ?? null,
+                    armor_rating: item.armor_rating ?? null,
+                    fire_rate: item.fire_rate ?? null,
+                    effect: item.effect ?? null,
+                    requirement: item.requirement ?? null,
+                    coverage: item.coverage ?? null,
                 };
             }
         }

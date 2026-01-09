@@ -32,6 +32,7 @@ export default function Gym() {
     const [selectedGym, setSelectedGym] = useState<string | null>(null);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [activePreset, setActivePreset] = useState<'standard' | 'choco' | 'happy'>('standard');
+    const [selectedStat, setSelectedStat] = useState<'strength' | 'defense' | 'speed' | 'dexterity' | null>(null);
 
     // Data from API
     const [battleStats, setBattleStats] = useState<TornBattleStats | null>(null);
@@ -92,31 +93,112 @@ export default function Gym() {
         const preset = JUMP_PRESETS[activePreset];
 
         if (preset.isFree) {
-            const maxEnergy = userData?.bars.energy.maximum || 100;
+            const currentEnergy = userData?.bars.energy.current || 100;
             return {
                 price: 0,
                 priceText: 'Free',
-                description: `${maxEnergy} Energy - Based on Current Full Energy`,
+                description: `${currentEnergy} Energy - Based on Current Energy`,
             };
         }
 
-        // Calculate total cost
+        // Get current energy stats
+        const currentEnergy = userData?.bars.energy.current || 0;
+        const maxEnergy = userData?.bars.energy.maximum || 100;
+
+        // Constants
+        const XANAX_ENERGY = 250;
+        const MAX_STACK_ENERGY = 1000;
+        const XANAX_ID = 206;
+
+        // Calculate Xanax usage
+        const xanaxUsed = Math.max(0, Math.floor((currentEnergy - maxEnergy) / XANAX_ENERGY));
+        const xanaxCanAdd = Math.max(0, Math.floor((MAX_STACK_ENERGY - currentEnergy) / XANAX_ENERGY));
+
+        // Calculate total cost with adjusted quantities
         let totalCost = 0;
         const itemBreakdown: string[] = [];
 
+        // Item effect values (per-item) for calculation display
+        const itemEffectValues: Record<number, { value: number; unit: string }> = {
+            206: { value: 250, unit: 'E' },    // Xanax: 250E per pill
+            36: { value: 35, unit: 'H' },      // Big Box of Chocolate Bars: 35H per item
+            366: { value: 2500, unit: 'H' },   // Erotic DVD: 2500H per item
+        };
+
         for (const item of preset.items) {
+            let actualQuantity = item.quantity;
+
+            // Adjust Xanax quantity based on what's already used
+            if (item.itemId === XANAX_ID) {
+                // For jump preset (originally 4 Xanax)
+                const targetXanax = item.quantity; // Usually 4
+                actualQuantity = Math.min(xanaxCanAdd, targetXanax - xanaxUsed);
+                actualQuantity = Math.max(0, actualQuantity); // Don't go negative
+            }
+
+            // Skip items with 0 quantity
+            if (actualQuantity <= 0) continue;
+
             const price = itemPrices[item.itemId] || 0;
             const itemDetail = itemDetails[item.itemId];
             const itemName = itemDetail?.name || `Item #${item.itemId}`;
+            const effectData = itemEffectValues[item.itemId];
 
-            totalCost += price * item.quantity;
-            itemBreakdown.push(`${item.quantity}× ${itemName}`);
+            totalCost += price * actualQuantity;
+
+            // Format: "2 Xanax (+500E)" or "Ecstasy (Double Happy)"
+            let itemText: string;
+            if (effectData) {
+                const total = effectData.value * actualQuantity;
+                itemText = `${actualQuantity} ${itemName} (+${formatNumber(total)}${effectData.unit})`;
+            } else if (item.itemId === 197) {
+                // Ecstasy - special case
+                itemText = `${itemName} (Double Happy)`;
+            } else {
+                itemText = `${actualQuantity} ${itemName}`;
+            }
+
+            itemBreakdown.push(itemText);
+        }
+
+        // Calculate total bonuses from preset
+        let energyBonus = 0;
+        let happinessBonus = 0;
+        let hasEcstasy = false;
+
+        for (const item of preset.items) {
+            let actualQuantity = item.quantity;
+
+            // Adjust Xanax quantity (same logic as above)
+            if (item.itemId === XANAX_ID) {
+                actualQuantity = Math.min(xanaxCanAdd, item.quantity - xanaxUsed);
+                actualQuantity = Math.max(0, actualQuantity);
+            }
+
+            if (actualQuantity <= 0) continue;
+
+            const effectData = itemEffectValues[item.itemId];
+            if (effectData) {
+                if (effectData.unit === 'E') {
+                    energyBonus += effectData.value * actualQuantity;
+                } else if (effectData.unit === 'H') {
+                    happinessBonus += effectData.value * actualQuantity;
+                }
+            }
+
+            // Check for Ecstasy
+            if (item.itemId === 197) {
+                hasEcstasy = true;
+            }
         }
 
         return {
             price: totalCost,
             priceText: `$${formatNumber(totalCost)}`,
             description: itemBreakdown.join(' + '),
+            energyBonus,
+            happinessBonus,
+            hasEcstasy,
         };
     }, [activePreset, itemPrices, itemDetails, userData]);
 
@@ -142,6 +224,17 @@ export default function Gym() {
                 // Use the highest stat as default for current stats
                 const highestStat = Math.max(stats.strength, stats.defense, stats.speed, stats.dexterity);
                 setCurrentStats(formatNumber(highestStat));
+
+                // Auto-select the stat with highest value
+                if (stats.strength >= stats.defense && stats.strength >= stats.speed && stats.strength >= stats.dexterity) {
+                    setSelectedStat('strength');
+                } else if (stats.defense >= stats.speed && stats.defense >= stats.dexterity) {
+                    setSelectedStat('defense');
+                } else if (stats.speed >= stats.dexterity) {
+                    setSelectedStat('speed');
+                } else {
+                    setSelectedStat('dexterity');
+                }
             }
             if (user) {
                 setHappiness(String(user.bars.happy.current));
@@ -201,6 +294,35 @@ export default function Gym() {
         }
     }, [activePreset]);
 
+    // Update happiness and energy when preset changes
+    useEffect(() => {
+        if (!userData) return;
+
+        const baseHappiness = userData.bars.happy.current;
+        const baseEnergy = userData.bars.energy.current;
+
+        if (activePreset === 'standard') {
+            // Standard preset uses current values
+            setHappiness(String(baseHappiness));
+            setEnergy(String(baseEnergy));
+        } else {
+            // Choco/Happy jump adds bonuses
+            const happinessBonus = presetInfo.happinessBonus || 0;
+            const energyBonus = presetInfo.energyBonus || 0;
+            const hasEcstasy = presetInfo.hasEcstasy || false;
+
+            // Ecstasy doubles TOTAL happiness (current + bonus)
+            let newHappiness = baseHappiness + happinessBonus;
+            if (hasEcstasy) {
+                newHappiness = newHappiness * 2;
+            }
+
+            const newEnergy = Math.min(1000, baseEnergy + energyBonus); // Cap at 1000E
+            setHappiness(String(newHappiness));
+            setEnergy(String(newEnergy));
+        }
+    }, [activePreset, presetInfo.energyBonus, presetInfo.happinessBonus, presetInfo.hasEcstasy, userData]);
+
     return (
         <SafeAreaView className="flex-1 bg-tactical-950">
             <View className="absolute inset-0 z-0">
@@ -234,12 +356,56 @@ export default function Gym() {
                             ) : (
                                 <>
                                     <View className="flex-row" style={{ gap: hs(10) }}>
-                                        <StatBox label="Strength" value={battleStats ? formatNumber(battleStats.strength) : '0'} labelClassName="text-accent-red" />
-                                        <StatBox label="Defense" value={battleStats ? formatNumber(battleStats.defense) : '0'} labelClassName="text-accent-green" />
+                                        <StatBox
+                                            label="Strength"
+                                            value={battleStats ? formatNumber(battleStats.strength) : '0'}
+                                            labelClassName="text-accent-red"
+                                            isSelected={selectedStat === 'strength'}
+                                            onPress={() => {
+                                                setSelectedStat('strength');
+                                                if (battleStats) {
+                                                    setCurrentStats(formatNumber(battleStats.strength));
+                                                }
+                                            }}
+                                        />
+                                        <StatBox
+                                            label="Defense"
+                                            value={battleStats ? formatNumber(battleStats.defense) : '0'}
+                                            labelClassName="text-accent-green"
+                                            isSelected={selectedStat === 'defense'}
+                                            onPress={() => {
+                                                setSelectedStat('defense');
+                                                if (battleStats) {
+                                                    setCurrentStats(formatNumber(battleStats.defense));
+                                                }
+                                            }}
+                                        />
                                     </View>
                                     <View className="flex-row" style={{ gap: hs(10) }}>
-                                        <StatBox label="Speed" value={battleStats ? formatNumber(battleStats.speed) : '0'} labelClassName="text-accent-blue" />
-                                        <StatBox label="Dexterity" value={battleStats ? formatNumber(battleStats.dexterity) : '0'} labelClassName="text-accent-yellow" />
+                                        <StatBox
+                                            label="Speed"
+                                            value={battleStats ? formatNumber(battleStats.speed) : '0'}
+                                            labelClassName="text-accent-blue"
+                                            isSelected={selectedStat === 'speed'}
+                                            onPress={() => {
+                                                setSelectedStat('speed');
+                                                if (battleStats) {
+                                                    setCurrentStats(formatNumber(battleStats.speed));
+                                                }
+                                            }}
+                                        />
+                                        <StatBox
+                                            label="Dexterity"
+                                            value={battleStats ? formatNumber(battleStats.dexterity) : '0'}
+                                            labelClassName="text-accent-yellow"
+                                            isSelected={selectedStat === 'dexterity'}
+                                            onPress={() => {
+                                                setSelectedStat('dexterity');
+                                                if (battleStats) {
+                                                    setCurrentStats(formatNumber(battleStats.dexterity));
+                                                }
+                                            }}
+                                        />
                                     </View>
                                 </>
                             )}
@@ -418,12 +584,45 @@ export default function Gym() {
     );
 }
 
-const StatBox = ({ label, value, labelClassName = "text-white/50" }: { label: string, value: string, labelClassName?: string }) => (
-    <View className="flex-1 bg-tactical-950 border border-tactical-800 rounded-[2px]" style={{ padding: ms(10) }}>
-        <Text className={`${labelClassName} uppercase`} style={{ fontSize: ms(10), fontFamily: "Inter_800ExtraBold" }}>{label}</Text>
-        <Text style={{ color: "white", fontSize: ms(16), fontFamily: "JetBrainsMono_800ExtraBold", marginTop: vs(4) }}>{value}</Text>
-    </View>
-);
+const StatBox = ({
+    label,
+    value,
+    labelClassName = "text-white/50",
+    isSelected = false,
+    onPress
+}: {
+    label: string;
+    value: string;
+    labelClassName?: string;
+    isSelected?: boolean;
+    onPress?: () => void;
+}) => {
+    // Map label colors to border colors
+    const colorMap: Record<string, string> = {
+        'text-accent-red': '#F43F5E',
+        'text-accent-green': '#10B981',
+        'text-accent-blue': '#0EA5E9',
+        'text-accent-yellow': '#F59E0B',
+    };
+
+    const borderColor = isSelected ? colorMap[labelClassName] : '#292524'; // tactical-800
+
+    return (
+        <TouchableOpacity
+            className="flex-1 bg-tactical-950 rounded-[2px]"
+            style={{
+                padding: ms(10),
+                borderWidth: 1,
+                borderColor: borderColor,
+            }}
+            onPress={onPress}
+            activeOpacity={0.7}
+        >
+            <Text className={`${labelClassName} uppercase`} style={{ fontSize: ms(10), fontFamily: "Inter_800ExtraBold" }}>{label}</Text>
+            <Text style={{ color: "white", fontSize: ms(16), fontFamily: "JetBrainsMono_800ExtraBold", marginTop: vs(4) }}>{value}</Text>
+        </TouchableOpacity>
+    );
+};
 
 // 3. PERBAIKAN INPUTGROUP: MENERIMA PROPS VALUE & ONCHANGETEXT
 // Kita gunakan ...props agar semua properti TextInput bisa masuk (value, onChangeText, keyboardType, dll)

@@ -395,7 +395,7 @@ export default function Home() {
                             const Icon = item!.icon;
                             return (
                                 <TouchableOpacity key={index} className="flex-1" onPress={() => router.push(item!.route)}>
-                                    <Card className="items-center justify-center flex-1 aspect-square" style={{ padding: ms(10), gap: vs(4) }}>
+                                    <Card className="items-center justify-center flex-1" style={{ padding: ms(10), gap: vs(4) }}>
                                         {item!.isSvg ? (
                                             <Icon width={ms(24)} height={ms(24)} />
                                         ) : (

@@ -24,6 +24,7 @@ export default {
                 backgroundColor: "#000000",
                 foregroundImage: "./assets/images/icon.png"
             },
+            googleServicesFile: "./google-services.json",
             edgeToEdgeEnabled: true,
             predictiveBackGestureEnabled: false
         },

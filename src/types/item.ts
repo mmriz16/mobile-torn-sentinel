@@ -1,12 +1,3 @@
-export interface ItemStats {
-    damage?: number;
-    accuracy?: number;
-    armor_rating?: number;
-    effect?: string;
-    requirement?: string;
-    coverage?: Record<string, number>; // Untuk armor (Head: 50, Chest: 100, dst)
-}
-
 export interface TornItem {
     id: number;
     name: string;
@@ -16,5 +7,15 @@ export interface TornItem {
     buy_price: number;
     market_value: number;
     image_url: string;
-    stats: ItemStats; // Ini hasil mapping dari JSONB
+
+    // --- BAGIAN INI DULU ADA DI DALAM 'stats', SEKARANG SEJAJAR ---
+    damage: number | null;        // Pakai null karena di DB bisa NULL
+    accuracy: number | null;
+    armor_rating: number | null;
+    fire_rate: number | null;     // Saya tambahkan karena ada di JSON sebelumnya
+    effect: string | null;
+    requirement: string | null;
+
+    // Coverage biasanya tetap JSONB di database, jadi di TS tetap Object
+    coverage: Record<string, number> | null;
 }

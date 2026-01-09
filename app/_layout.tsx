@@ -22,6 +22,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 // Tambahkan Platform di sini
 import { Platform, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "../global.css";
 import { GridPattern } from "../src/components/ui/grid-pattern";
 
@@ -78,41 +79,44 @@ export default function RootLayout() {
   }
 
   return (
-    // 1. Container Utama: Full Screen & Center alignment
-    <View className="flex-1 bg-tactical-950 items-center justify-center">
+    // GestureHandlerRootView MUST wrap the entire app for DraggableFlatList to work in production
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* 1. Container Utama: Full Screen & Center alignment */}
+      <View className="flex-1 bg-tactical-950 items-center justify-center">
 
-      {/* 2. Background Pattern: Biarkan memenuhi seluruh layar (Absolute) */}
-      <View style={{ position: 'absolute', width: '100%', height: '100%' }}>
-        <GridPattern />
+        {/* 2. Background Pattern: Biarkan memenuhi seluruh layar (Absolute) */}
+        <View style={{ position: 'absolute', width: '100%', height: '100%' }}>
+          <GridPattern />
+        </View>
+
+        {/* 3. Container Aplikasi: Dibatasi max 500px (TABLET SAFE) */}
+        <View
+          className="flex-1 w-full bg-tactical-950"
+          style={{
+            maxWidth: 500, // <--- INI KUNCINYA
+            width: '100%',
+            // Opsional: Beri garis pinggir tipis jika di Web/Tablet biar rapi
+            borderLeftWidth: Platform.OS === 'web' || Platform.OS === 'windows' || Platform.OS === 'macos' ? 1 : 0,
+            borderRightWidth: Platform.OS === 'web' || Platform.OS === 'windows' || Platform.OS === 'macos' ? 1 : 0,
+            borderColor: '#333',
+            overflow: 'hidden' // Agar konten tidak bocor keluar container
+          }}
+        >
+          {/* Redirect to api-key if no key is stored */}
+          {!hasApiKey && <Redirect href="/(modals)/api-key" />}
+
+          <Stack screenOptions={{ headerShown: false }}>
+            {/* Tabs jadi root */}
+            <Stack.Screen name="(tabs)" />
+
+            {/* Modals group */}
+            <Stack.Screen
+              name="(modals)/api-key"
+              options={{ presentation: "modal" }}
+            />
+          </Stack>
+        </View>
       </View>
-
-      {/* 3. Container Aplikasi: Dibatasi max 500px (TABLET SAFE) */}
-      <View
-        className="flex-1 w-full bg-tactical-950"
-        style={{
-          maxWidth: 500, // <--- INI KUNCINYA
-          width: '100%',
-          // Opsional: Beri garis pinggir tipis jika di Web/Tablet biar rapi
-          borderLeftWidth: Platform.OS === 'web' || Platform.OS === 'windows' || Platform.OS === 'macos' ? 1 : 0,
-          borderRightWidth: Platform.OS === 'web' || Platform.OS === 'windows' || Platform.OS === 'macos' ? 1 : 0,
-          borderColor: '#333',
-          overflow: 'hidden' // Agar konten tidak bocor keluar container
-        }}
-      >
-        {/* Redirect to api-key if no key is stored */}
-        {!hasApiKey && <Redirect href="/(modals)/api-key" />}
-
-        <Stack screenOptions={{ headerShown: false }}>
-          {/* Tabs jadi root */}
-          <Stack.Screen name="(tabs)" />
-
-          {/* Modals group */}
-          <Stack.Screen
-            name="(modals)/api-key"
-            options={{ presentation: "modal" }}
-          />
-        </Stack>
-      </View>
-    </View>
+    </GestureHandlerRootView>
   );
 }

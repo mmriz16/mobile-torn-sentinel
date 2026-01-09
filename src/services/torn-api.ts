@@ -451,7 +451,6 @@ export async function fetchBattleStats(): Promise<TornBattleStats | null> {
         clearTimeout(timeoutId);
 
         const data = await response.json();
-        console.log("Battle stats raw response:", JSON.stringify(data));
 
         if (data.error) {
             console.error("Torn API error:", data.error);

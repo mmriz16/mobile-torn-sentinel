@@ -1,8 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
-import 'react-native-url-polyfill/auto';
+import Constants from 'expo-constants'; // <--- Alat untuk baca app.config.js
+import 'react-native-url-polyfill/auto'; // <--- WAJIB ADA (Obat Network Error)
 
-// Ganti dengan data asli project Supabase Anda!
-const SUPABASE_URL = 'https://tbrdoygkaxqwennbrmxt.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRicmRveWdrYXhxd2VubmJybXh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NzQyMDUsImV4cCI6MjA4MzM1MDIwNX0.xiBjMLYkNFiZ2yZsEbuO-6sbhK-cGxS4DZ7K7hizHj4';
+// 1. Ambil kunci dari "Extra" yang sudah kamu set di app.config.js
+// Gunakan ?. (optional chaining) jaga-jaga kalau null
+const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl;
+const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey;
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// 2. Cek apakah kunci berhasil diambil (Untuk debugging di terminal)
+if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("⚠️  BAHAYA: Supabase URL/Key tidak ditemukan di Config!");
+    console.error("Pastikan kamu sudah jalankan: eas update");
+}
+
+// 3. Buat Client
+export const supabase = createClient(
+    supabaseUrl || "",
+    supabaseAnonKey || "",
+    {
+        auth: {
+            persistSession: true, // Agar user tidak logout saat tutup aplikasi
+            detectSessionInUrl: false,
+        },
+    }
+);

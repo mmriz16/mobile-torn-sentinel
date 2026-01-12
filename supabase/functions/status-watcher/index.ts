@@ -157,7 +157,7 @@ serve(async (req) => {
         else if (d.life.current < d.life.maximum) await reset("life_full");
 
         // 5. TRAVEL
-        if (d.travel.time_left === 0 && d.travel.destination !== "Torn" && !userStatus.travel_landed) await push("✈️ Arrived!", You just landed ${d.travel.destination} grab your items, check prices, and plan your next flight before you waste time. `, "travel_landed");
+        if (d.travel.time_left === 0 && d.travel.destination !== "Torn" && !userStatus.travel_landed) await push("✈️ Arrived!", `You just landed ${d.travel.destination} grab your items, check prices, and plan your next flight before you waste time. `, "travel_landed");
         else if (d.travel.time_left > 0) await reset("travel_landed");
 
         // 6. DRUGS

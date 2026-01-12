@@ -476,10 +476,10 @@ export function formatFactionStatus(status: FactionMemberStatus): string {
         desc = desc.replace(/^In /i, 'IN ');
 
         // Country shortcuts
-        desc = desc.replace(/United Arab Emirates/i, 'UAE');
-        desc = desc.replace(/United Kingdom/i, 'UK');
-        desc = desc.replace(/South Africa/i, 'SA');
-        desc = desc.replace(/Cayman Islands/i, 'CAYMAN');
+        desc = desc.replace(/United Arab Emirates/i, 'United Arab Emirates');
+        desc = desc.replace(/United Kingdom/i, 'United Kingdom');
+        desc = desc.replace(/South Africa/i, 'South Africa');
+        desc = desc.replace(/Cayman Islands/i, 'Cayman Islands');
 
         return desc.toUpperCase();
     }

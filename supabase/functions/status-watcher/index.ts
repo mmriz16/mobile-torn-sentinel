@@ -141,48 +141,48 @@ serve(async (req) => {
         // --- LOGIKA PENGECEKAN ---
 
         // 1. ENERGY
-        if (d.energy.current >= d.energy.maximum && !userStatus.energy_full) await push("⚡ Energy Full", "Waktunya Gym!", "energy_full");
+        if (d.energy.current >= d.energy.maximum && !userStatus.energy_full) await push("⚡ Energy Full", "Your energy is capped right now—go train, hit, or do something before the regen gets wasted.", "energy_full");
         else if (d.energy.current < d.energy.maximum) await reset("energy_full");
 
         // 2. NERVE
-        if (d.nerve.current >= d.nerve.maximum && !userStatus.nerve_full) await push("🧠 Nerve Full", "Ayo Crimes!", "nerve_full");
+        if (d.nerve.current >= d.nerve.maximum && !userStatus.nerve_full) await push("🧠 Nerve Full", "Nerve is maxed out—perfect time to run a bunch of crimes and cash in the regen.", "nerve_full");
         else if (d.nerve.current < d.nerve.maximum) await reset("nerve_full");
 
         // 3. HAPPY
-        if (d.happy.current >= d.happy.maximum && !userStatus.happy_full) await push("😊 Happy Full", "Happiness maksimal.", "happy_full");
+        if (d.happy.current >= d.happy.maximum && !userStatus.happy_full) await push("😊 Happy Full", "Happy is topped up—if you’ve been waiting to train, this is your moment to make it count.", "happy_full");
         else if (d.happy.current < d.happy.maximum) await reset("happy_full");
 
         // 4. LIFE
-        if (d.life.current >= d.life.maximum && !userStatus.life_full) await push("❤️ Life Full", "Darah penuh.", "life_full");
+        if (d.life.current >= d.life.maximum && !userStatus.life_full) await push("❤️ Life Full", "You’re back at full health—no need to play it safe anymore, you’re good to go.", "life_full");
         else if (d.life.current < d.life.maximum) await reset("life_full");
 
         // 5. TRAVEL
-        if (d.travel.time_left === 0 && d.travel.destination !== "Torn" && !userStatus.travel_landed) await push("✈️ Arrived!", `Sampai di ${d.travel.destination}`, "travel_landed");
+        if (d.travel.time_left === 0 && d.travel.destination !== "Torn" && !userStatus.travel_landed) await push("✈️ Arrived!", You just landed ${d.travel.destination} grab your items, check prices, and plan your next flight before you waste time. `, "travel_landed");
         else if (d.travel.time_left > 0) await reset("travel_landed");
 
         // 6. DRUGS
-        if (d.cooldowns.drug === 0 && !userStatus.drugs_ready) await push("💊 Drug Ready", "Bisa pakai Xanax lagi.", "drugs_ready");
+        if (d.cooldowns.drug === 0 && !userStatus.drugs_ready) await push("💊 Drug Ready", "Drug cooldown is finally over—your next dose is available whenever you’re ready.", "drugs_ready");
         else if (d.cooldowns.drug > 0) await reset("drugs_ready");
 
         // 7. BOOSTER
-        if (d.cooldowns.booster === 0 && !userStatus.booster_ready) await push("🍬 Booster Ready", "Cooldown habis.", "booster_ready");
+        if (d.cooldowns.booster === 0 && !userStatus.booster_ready) await push("🍬 Booster Ready", "Booster cooldown is done—if you’re stacking or preparing for war, you can use one again.", "booster_ready");
         else if (d.cooldowns.booster > 0) await reset("booster_ready");
 
         // 8. MEDICAL
-        if (d.cooldowns.medical === 0 && !userStatus.medical_out) await push("🏥 Keluar RS", "Kamu sudah sehat.", "medical_out");
+        if (d.cooldowns.medical === 0 && !userStatus.medical_out) await push("🏥 Out of Medical", "You’re out of the hospital—get back to your routine, or jump straight back into the action.", "medical_out");
         else if (d.cooldowns.medical > 0) await reset("medical_out");
 
         // 9. JAIL
-        if (d.cooldowns.jail === 0 && !userStatus.jail_free) await push("🚓 Bebas Penjara", "Sudah bebas!", "jail_free");
+        if (d.cooldowns.jail === 0 && !userStatus.jail_free) await push("🚓 Out of Jail", "You’re free again—go handle your stuff, and maybe keep a low profile for a bit.", "jail_free");
         else if (d.cooldowns.jail > 0) await reset("jail_free");
 
         // 10. EDUCATION
-        if (d.education_time_left === 0 && !userStatus.edu_complete) await push("🎓 Class Finished", "Kuliah selesai.", "edu_complete");
+        if (d.education_time_left === 0 && !userStatus.edu_complete) await push("🎓 Class Finished", "Your education course just finished—enroll in the next one so you keep progressing nonstop.", "edu_complete");
         else if (d.education_time_left > 0) await reset("edu_complete");
 
         // 11. CHAIN
         if (d.chain && d.chain.current > 0 && d.chain.timeout <= 90 && !userStatus.chain_warning) {
-          await push("🔗 CHAIN ALERT", `Chain sisa ${d.chain.timeout} detik!`, "chain_warning");
+          await push("🔗 CHAIN ALERT", `Chain pace is dropping—hits within ${d.chain.timeout} to stay on track, so let’s push it. `, "chain_warning");
         } else if (d.chain && (d.chain.timeout > 90 || d.chain.current === 0)) {
           await reset("chain_warning");
         }

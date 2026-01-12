@@ -156,9 +156,27 @@ serve(async (req) => {
         if (d.life.current >= d.life.maximum && !userStatus.life_full) await push("❤️ Life Full", "You’re back at full health—no need to play it safe anymore, you’re good to go.", "life_full");
         else if (d.life.current < d.life.maximum) await reset("life_full");
 
-        // 5. TRAVEL
-        if (d.travel.time_left === 0 && d.travel.destination !== "Torn" && !userStatus.travel_landed) await push("✈️ Arrived!", `You just landed ${d.travel.destination} grab your items, check prices, and plan your next flight before you waste time. `, "travel_landed");
-        else if (d.travel.time_left > 0) await reset("travel_landed");
+        // 5A. TRAVEL - Landing soon (<= 2 minutes)
+if (d.travel.time_left > 0 && d.travel.time_left <= 120 && !userStatus.travel_soon) {
+  await push(
+    "🛬 Landing soon",
+    `Almost there—about ${d.travel.time_left}s left to ${d.travel.destination}. Get ready to buy/sell fast.`,
+    "travel_soon"
+  );
+} else if (d.travel.time_left === 0 || d.travel.time_left > 120) {
+  await reset("travel_soon");
+}
+
+// 5B. TRAVEL - Landed (time_left === 0)
+if (d.travel.time_left === 0 && d.travel.destination !== "Torn" && !userStatus.travel_landed) {
+  await push(
+    "✈️ Arrived!",
+    `You just landed in ${d.travel.destination}—grab your items, check prices, and plan your next flight before you waste time.`,
+    "travel_landed"
+  );
+} else if (d.travel.time_left > 0) {
+  await reset("travel_landed");
+}
 
         // 6. DRUGS
         if (d.cooldowns.drug === 0 && !userStatus.drugs_ready) await push("💊 Drug Ready", "Drug cooldown is finally over—your next dose is available whenever you’re ready.", "drugs_ready");

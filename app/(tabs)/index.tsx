@@ -8,8 +8,10 @@ import { Card } from "../../src/components/ui/card";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
 import { ProgressBar } from "../../src/components/ui/progress-bar";
 import TravelLoader from "../../src/components/ui/travel-loader";
-import { AVAILABLE_SHORTCUTS, DEFAULT_SHORTCUTS } from "../../src/constants/shortcuts";
+import { AVAILABLE_HOME_SHORTCUTS, AVAILABLE_SHORTCUTS, DEFAULT_SHORTCUTS } from "../../src/constants/shortcuts";
+import { supabase } from "../../src/services/supabase";
 
+import { syncUserTravelStatus } from "../../src/services/faction-service";
 import { syncNetworthAndGetProfit } from "../../src/services/profit-tracker";
 import {
     fetchEducationCourses,
@@ -64,6 +66,7 @@ export default function Home() {
     const [refreshing, setRefreshing] = useState(false);
     const [activeShortcuts, setActiveShortcuts] = useState<string[]>(DEFAULT_SHORTCUTS);
     const [isShortcutModalVisible, setIsShortcutModalVisible] = useState(false);
+    const [testNotifCooldown, setTestNotifCooldown] = useState(0);
 
     useEffect(() => {
         loadShortcuts();
@@ -106,6 +109,54 @@ export default function Home() {
         setShowRentNotification(true);
     }, []);
 
+    // Handle test notification button press
+    const handleTestNotification = async () => {
+        if (testNotifCooldown > 0) return;
+
+        try {
+            // Get user id from userData
+            const userId = userData?.profile?.id;
+            console.log("🔔 Test notification button pressed");
+            console.log("📌 User ID:", userId);
+
+            if (!userId) {
+                console.error("❌ User ID not found");
+                return;
+            }
+
+            console.log("📤 Updating test_notif to true for user_id:", userId);
+
+            // Update test_notif to true in Supabase
+            const { data, error } = await supabase
+                .from('user_notifications')
+                .update({ test_notif: true })
+                .eq('user_id', userId)
+                .select();
+
+            if (error) {
+                console.error("❌ Failed to trigger test notification:", error.message, error);
+                return;
+            }
+
+            console.log("✅ Supabase update response:", data);
+            console.log("✅ Test notification triggered for user", userId);
+
+            // Start 5 second cooldown
+            setTestNotifCooldown(5);
+            const interval = setInterval(() => {
+                setTestNotifCooldown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(interval);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } catch (e) {
+            console.error("❌ Error triggering test notification:", e);
+        }
+    };
+
     useEffect(() => {
         loadData(true);
         const refreshInterval = setInterval(() => {
@@ -117,15 +168,24 @@ export default function Home() {
     useEffect(() => {
         if (!userData) return;
         const now = Date.now();
+
+        // Jail time from profile status (when in Jail)
         let jailEndTime = 0;
         if (userData.profile?.status?.state === "Jail" && userData.profile?.status?.until) {
             jailEndTime = userData.profile.status.until * 1000;
         }
 
+        // Hospital time from profile status (when in Hospital)
+        // Note: cooldowns.medical is for using medical items, NOT hospital time
+        let hospitalEndTime = 0;
+        if (userData.profile?.status?.state === "Hospital" && userData.profile?.status?.until) {
+            hospitalEndTime = userData.profile.status.until * 1000;
+        }
+
         setCooldownEndTimes({
             drug: now + (userData.cooldowns.drug * 1000),
             booster: now + (userData.cooldowns.booster * 1000),
-            medical: now + (userData.cooldowns.medical * 1000),
+            medical: hospitalEndTime, // Changed: use hospital time from status, not cooldowns.medical
             jail: jailEndTime,
         });
 
@@ -172,6 +232,20 @@ export default function Home() {
         if (showLoading) setIsLoading(true);
         const data = await fetchUserData();
         setUserData(data);
+
+        // Sync travel status to Supabase for faction mates to see
+        if (data?.profile?.id && data?.travel) {
+            const travelState = data.travel.time_left > 0 ? 'Traveling' : (data.travel.destination !== 'Torn' ? 'Abroad' : 'Okay');
+            syncUserTravelStatus(
+                data.profile.id,
+                travelState,
+                data.travel.destination || null,
+                data.travel.arrival_at || null,
+                data.profile.status?.state || null,
+                data.profile.status?.until || null
+            ).catch(err => console.error('Failed to sync travel status:', err));
+        }
+
         const nw = await fetchNetworth();
         setNetworth(nw);
 
@@ -270,9 +344,17 @@ export default function Home() {
                                 API Req: {apiRequestCount}/min
                             </Text>
                         </View>
-                        <View className="p-2 bg-tactical-900 rounded-full">
-                            <Bell size={ms(18)} color="rgba(255,255,255,0.8)" />
-                        </View>
+                        <TouchableOpacity
+                            className={`p-2 rounded-full ${testNotifCooldown > 0 ? 'bg-tactical-800' : 'bg-tactical-900'}`}
+                            onPress={handleTestNotification}
+                            disabled={testNotifCooldown > 0}
+                        >
+                            {testNotifCooldown > 0 ? (
+                                <Text className="text-white/50 font-mono" style={{ fontSize: ms(12), width: ms(18), textAlign: 'center' }}>{testNotifCooldown}</Text>
+                            ) : (
+                                <Bell size={ms(18)} color="rgba(255,255,255,0.8)" />
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
 
@@ -413,6 +495,7 @@ export default function Home() {
                         onClose={() => setIsShortcutModalVisible(false)}
                         currentShortcuts={activeShortcuts}
                         onSave={handleSaveShortcuts}
+                        availableShortcuts={AVAILABLE_HOME_SHORTCUTS}
                     />
 
                     {/* Status Overview */}

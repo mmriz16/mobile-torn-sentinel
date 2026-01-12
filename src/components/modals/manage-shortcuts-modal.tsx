@@ -14,9 +14,10 @@ interface ManageShortcutsModalProps {
     onClose: () => void;
     currentShortcuts: string[];
     onSave: (newShortcuts: string[]) => void;
+    availableShortcuts?: ShortcutItem[];
 }
 
-export const ManageShortcutsModal = ({ visible, onClose, currentShortcuts, onSave }: ManageShortcutsModalProps) => {
+export const ManageShortcutsModal = ({ visible, onClose, currentShortcuts, onSave, availableShortcuts = AVAILABLE_SHORTCUTS }: ManageShortcutsModalProps) => {
     const [localShortcuts, setLocalShortcuts] = useState<string[]>([]);
 
     useEffect(() => {
@@ -40,10 +41,10 @@ export const ManageShortcutsModal = ({ visible, onClose, currentShortcuts, onSav
     };
 
     const activeItems = localShortcuts
-        .map(id => AVAILABLE_SHORTCUTS.find(s => s.id === id))
+        .map(id => availableShortcuts.find(s => s.id === id))
         .filter(Boolean) as ShortcutItem[];
 
-    const availableItems = AVAILABLE_SHORTCUTS
+    const availableItems = availableShortcuts
         .filter(s => !localShortcuts.includes(s.id));
 
     const renderItem = ({ item, drag, isActive }: RenderItemParams<ShortcutItem>) => {

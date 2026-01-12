@@ -11,3 +11,27 @@ Check Password :
 eas credentials
 
 Please run the eas update command for android production, but generate the --message content automatically based on my recent file changes.
+
+---
+
+## Supabase Edge Functions
+
+Deploy status-watcher:
+```bash
+supabase functions deploy status-watcher --project-ref YOUR_PROJECT_REF
+```
+
+Deploy semua functions:
+```bash
+supabase functions deploy --project-ref tbrdoygkaxqwennbrmxt
+```
+
+Test function:
+```bash
+supabase functions invoke status-watcher --project-ref tbrdoygkaxqwennbrmxt
+```
+
+View logs:
+```bash
+supabase functions logs status-watcher --project-ref tbrdoygkaxqwennbrmxt
+```

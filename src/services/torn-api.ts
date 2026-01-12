@@ -154,8 +154,82 @@ export interface TornDrugStats {
             xanax: number;
             total: number;
             overdoses: number;
+
         };
     };
+}
+
+// Faction member status
+export interface FactionMemberStatus {
+    description: string;
+    details: string;
+    state: 'Okay' | 'Traveling' | 'Abroad' | 'Hospital' | 'Jail' | 'Federal';
+    color: 'green' | 'blue' | 'red';
+    until: number;
+}
+
+// Faction member
+export interface FactionMember {
+    id: number;
+    name: string;
+    level: number;
+    days_in_faction: number;
+    last_action: { status: string; timestamp: number; relative: string };
+    status: FactionMemberStatus;
+    position: string;
+}
+
+// Faction rank
+export interface FactionRank {
+    level: number;
+    name: string;
+    division: number;
+    position: number;
+    wins: number;
+}
+
+// Faction basic data
+export interface FactionBasicData {
+    ID: number;
+    name: string;
+    tag: string;
+    tag_image: string;
+    leader: number;
+    'co-leader': number;
+    respect: number;
+    age: number;
+    capacity: number;
+    best_chain: number;
+    rank: FactionRank;
+    members: Record<string, FactionMember>;
+    peace: Record<string, number>;
+    rank_wars?: Record<string, any>; // Add these as optional or record
+    campus_wars?: Record<string, any>;
+    territory_wars: Record<string, any>;
+    raid_wars: Record<string, any>;
+}
+
+// Ranked war faction
+export interface RankedWarFaction {
+    id: number;
+    name: string;
+    score: number;
+    chain: number;
+}
+
+// Ranked war
+export interface RankedWar {
+    id: number;
+    start: number;
+    end: number;
+    target: number;
+    winner: number;
+    factions: RankedWarFaction[];
+}
+
+// Ranked wars response
+export interface RankedWarsResponse {
+    rankedwars: RankedWar[];
 }
 
 // Fetch drug stats
@@ -285,6 +359,93 @@ export async function fetchNetworth(): Promise<TornNetworth | null> {
     }
 }
 
+// Fetch faction basic data
+export async function fetchFactionBasic(factionId?: number): Promise<FactionBasicData | null> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        trackApiRequest();
+        // If factionId is provided, use it, otherwise uses the user's faction via key? 
+        // Actually /faction/ endpoint defaults to user's faction if no ID provided.
+        // But the user example URL was `https://api.torn.com/faction/?selections=basic` which implies no ID specific but maybe the user's own.
+        // Let's stick to the URL provided in the prompt.
+
+        let url = `https://api.torn.com/faction/`;
+        if (factionId) {
+            url += `${factionId}`;
+        }
+        url += `?selections=basic&key=${apiKey}`;
+
+        const response = await fetch(
+            url,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        return data as FactionBasicData;
+    } catch (error) {
+        console.error("Failed to fetch faction data:", error);
+        return null;
+    }
+}
+
+// Fetch ranked wars
+export async function fetchRankedWars(factionId?: number): Promise<RankedWarsResponse | null> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        trackApiRequest();
+        // User provided: https://api.torn.com/v2/faction/rankedwars?offset=0&limit=20&sort=DESC
+
+        // V2 endpoint usually requires /{id}/ if looking for specific, or maybe it infers from key.
+        // Documentation says /v2/faction/rankedwars lists all ranked wars if no ID? 
+        // Wait, the user request says "mappingkan data... dari api ini ... https://api.torn.com/faction/?selections=basic ... https://api.torn.com/v2/faction/rankedwars?offset=0&limit=20&sort=DESC"
+        // The second URL looks like a generic RW list or maybe filtered by user's faction if authenticated? 
+        // Actually /v2/faction/rankedwars returns *global* ranked wars usually or maybe the user meant /v2/faction/{id}/rankedwars?
+        // Let's assume the user wants the specific URL they gave.
+        // But typically we want OUR faction's wars. 
+        // The example data provided shows "We Are Rising II" (ID 51896) in every entry. So it must be filtered or user's faction wars.
+        // I will use /v2/faction/rankedwars and assume it contextually returns relevant ones or use the ID if I can.
+        // BUT V2 often requires ID in path like /v2/faction/{id}/rankedwars. 
+        // Let's check the user provided URL again: `https://api.torn.com/v2/faction/rankedwars...` 
+        // It does NOT have an ID.
+        // I will stick to what the user provided.
+
+        const response = await fetch(
+            `${TORN_API_V2_BASE}/faction/rankedwars?offset=0&limit=20&sort=DESC&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        return data as RankedWarsResponse;
+    } catch (error) {
+        console.error("Failed to fetch ranked wars:", error);
+        return null;
+    }
+}
+
 // Format time remaining (seconds to HH:MM:SS)
 export function formatTimeRemaining(seconds: number): string {
     if (seconds <= 0) return "Ready";
@@ -297,6 +458,33 @@ export function formatTimeRemaining(seconds: number): string {
         return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
     return `${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+}
+
+// Format faction member status (e.g. "Traveling to UAE" -> "TO UAE")
+export function formatFactionStatus(status: FactionMemberStatus): string {
+    if (status.state === 'Okay') return 'OKAY';
+
+    // Check for travel states
+    if (['Traveling', 'Abroad'].includes(status.state)) {
+        let desc = status.description;
+
+        // Handle specific return case
+        if (desc.includes('Returning to Torn')) return 'TO TORN';
+
+        // Standard replacements
+        desc = desc.replace(/^Traveling to /i, 'TO ');
+        desc = desc.replace(/^In /i, 'IN ');
+
+        // Country shortcuts
+        desc = desc.replace(/United Arab Emirates/i, 'UAE');
+        desc = desc.replace(/United Kingdom/i, 'UK');
+        desc = desc.replace(/South Africa/i, 'SA');
+        desc = desc.replace(/Cayman Islands/i, 'CAYMAN');
+
+        return desc.toUpperCase();
+    }
+
+    return status.description;
 }
 
 // Format large numbers with commas
@@ -639,14 +827,13 @@ export async function fetchItemDetails(itemIds: number[]): Promise<Record<number
                         market_value: item.market_value,
                         buy_price: item.buy_price || 0,
                         image_url: item.image || '',
-                        stats: {
-                            effect: item.effect,
-                            damage: item.damage,
-                            accuracy: item.accuracy,
-                            armor_rating: item.armor,
-                            requirement: item.requirement,
-                            coverage: item.coverage
-                        }
+                        effect: item.effect,
+                        damage: item.damage,
+                        accuracy: item.accuracy,
+                        armor_rating: item.armor,
+                        requirement: item.requirement,
+                        coverage: item.coverage,
+                        fire_rate: item.fire_rate || item.firerate || null
                     };
                 }
             }

@@ -6,11 +6,20 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development"
+      },
+      "android": {
+        "gradleCommand": ":app:assembleDebug"
+      }
     },
     "preview": {
       "distribution": "internal",
       "developmentClient": false,
+      "env": {
+        "APP_VARIANT": "development"
+      },
       "android": {
         "buildType": "apk",
         "autoIncrement": "versionCode"

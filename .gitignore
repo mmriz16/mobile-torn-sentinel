@@ -47,3 +47,8 @@ app-example
 .keystore
 credentials.json
 android/local.properties
+
+# Secrets - NEVER commit these
+service-account.json
+google-services.json
+.env

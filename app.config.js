@@ -1,8 +1,11 @@
 import 'dotenv/config';
 
+// Determine if this is a development build
+const IS_DEV = process.env.APP_VARIANT === 'development';
+
 export default {
     expo: {
-        name: "Torn Sentinel",
+        name: IS_DEV ? "Torn Sentinel Dev" : "Torn Sentinel",
         slug: "mobile-torn-sentinel",
         version: "1.0.0",
         orientation: "portrait",
@@ -13,13 +16,14 @@ export default {
 
         ios: {
             jsEngine: "hermes",
-            supportsTablet: true
+            supportsTablet: true,
+            bundleIdentifier: IS_DEV ? "com.kaozi.tornsentinel.dev" : "com.kaozi.tornsentinel"
         },
 
         android: {
             jsEngine: "hermes",
-            // PENTING: Jika build gagal karena izin, ganti 'mmriz16' jadi 'kaozi'
-            package: "com.kaozi.tornsentinel",
+            // Package name berbeda untuk dev vs production
+            package: IS_DEV ? "com.kaozi.tornsentinel.dev" : "com.kaozi.tornsentinel",
             adaptiveIcon: {
                 backgroundColor: "#000000",
                 foregroundImage: "./assets/images/icon.png"
@@ -70,8 +74,6 @@ export default {
         updates: {
             url: "https://u.expo.dev/0d7c4841-e629-473e-b02d-ff02debf1347"
         },
-        runtimeVersion: {
-            policy: "appVersion"
-        },
+        runtimeVersion: "1.0.0",
     }
 };

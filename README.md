@@ -1,50 +1,98 @@
-# Welcome to your Expo app 👋
+# Torn Sentinel 🛡️
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**Torn Sentinel** is a mobile companion application for Torn City players, built with React Native (Expo) and Supabase. It provides real-time monitoring of user stats, faction tracking, and intelligent notifications.
 
-## Get started
+## ✨ Features
 
-1. Install dependencies
+- **Dashboard**: Real-time stats (Energy, Nerve, Happy, Life), Networth tracking, and Daily Profit calculator.
+- **Faction Tracking**: 
+  - View faction members list with detailed status (Okay, Traveling, Hospital, Jail).
+  - **Real-time Travel Tracking**: See accurate arrival times for faction members who use the app.
+  - Syncs data seamlessly via Supabase.
+- **Gym & Education**: Track active courses and gym train estimates.
+- **Quick Actions**: Customizable shortcuts for frequently used Torn features.
+- **Smart Notifications**: Push notifications for full energy, nerve, travel arrival, hospitalization, etc. (Powered by Supabase Edge Functions).
+- **Multiple Environments**: Dev, Preview, and Production builds.
 
+## 🛠️ Tech Stack
+
+- **Framework**: React Native (Expo SDK 52)
+- **Language**: TypeScript
+- **Styling**: NativeWind (Tailwind CSS)
+- **Navigation**: Expo Router (File-based routing)
+- **Backend/DB**: Supabase (PostgreSQL, Edge Functions, Auth)
+- **API**: Torn API
+
+## 📂 Project Structure
+
+```
+├── app/                  # Expo Router pages/screens
+│   ├── (tabs)/           # Main tab navigation
+│   ├── (qa-home)/        # Quick actions for Home
+│   └── (qa-factions)/    # Faction related screens
+├── src/
+│   ├── components/       # Reusable UI components
+│   ├── constants/        # App constants & config
+│   ├── services/         # API integrations (Torn, Supabase)
+│   ├── styles/           # Global styles & themes
+│   ├── types/            # TypeScript definitions
+│   └── utils/            # Helper functions
+├── supabase/             # Supabase migrations & Edge Functions
+└── assets/               # Images and fonts
+```
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+1. **Node.js**: LTS version recommended.
+2. **Torn API Key**: You need a valid API Key from [Torn Preferences](https://www.torn.com/preferences.php).
+3. **Supabase Project**: Set up a Supabase project for backend syncing.
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/mmriz16/mobile-torn-sentinel.git
+   cd mobile-torn-sentinel
+   ```
+
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-2. Start the app
+3. Configure Environment Variables:
+   Create a `.env` file in the root based on your Supabase credentials:
+   ```env
+   SUPABASE_URL=your_supabase_url
+   SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
 
+4. Run the app:
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+## 📱 Build & Deployment
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+This project uses EAS (Expo Application Services) for building.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+**Development Build (Torn Sentinel Dev):**
 ```bash
-npm run reset-project
+eas build --profile development --platform android
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+**Production Build (Torn Sentinel):**
+```bash
+eas build --profile production --platform android
+```
 
-## Learn more
+## 📄 Documentation
 
-To learn more about developing your project with Expo, look at the following resources:
+- **Supabase Edge Functions**: See `supabase/functions/README.md` (if available) or check `command.md` for deployment cheatsheet.
+- **Commands**: Check `command.md` for useful CLI commands used in this project.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## ⚠️ Disclaimer
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This application is a third-party tool and is not affiliated with Torn City. Usage of the Torn API must comply with Torn's [API Terms of Service](https://www.torn.com/api.html).

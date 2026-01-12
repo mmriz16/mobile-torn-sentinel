@@ -77,7 +77,7 @@ export async function scheduleAllNotifications(data: TornData) {
         // Notif 2: Pas Mendarat
         await scheduleItem(
             "🛬 Arrived!",
-            `Welcome to ${data.travel.destination}! Check stock now!`,
+            `You just landed ${data.travel.destination}! grab your items, check prices, and plan your next flight before you waste time. `,
             timeLeft
         );
     }
@@ -90,7 +90,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (energyFullTime > 0) {
         const secondsLeft = energyFullTime - now;
         if (secondsLeft > 0) {
-            await scheduleItem("⚡ Energy Full", "Energy is 100%. Train or War!", secondsLeft);
+            await scheduleItem("⚡ Energy Full", "Your energy is capped right now—go train, hit, or do something before the regen gets wasted.", secondsLeft);
         }
     }
 
@@ -99,7 +99,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (nerveFullTime > 0) {
         const secondsLeft = nerveFullTime - now;
         if (secondsLeft > 0) {
-            await scheduleItem("🧠 Nerve Full", "Ready for crimes!", secondsLeft);
+            await scheduleItem("🧠 Nerve Full", "Nerve is maxed out—perfect time to run a bunch of crimes and cash in the regen.", secondsLeft);
         }
     }
 
@@ -108,7 +108,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (lifeFullTime > 0) {
         const secondsLeft = lifeFullTime - now;
         if (secondsLeft > 0) {
-            await scheduleItem("❤️ Life Full", "Health fully restored.", secondsLeft);
+            await scheduleItem("❤️ Life Full", "You’re back at full health—no need to play it safe anymore, you’re good to go.", secondsLeft);
         }
     }
 
@@ -120,27 +120,27 @@ export async function scheduleAllNotifications(data: TornData) {
     let nextTickSeconds = ((15 - (minutes % 15)) * 60) - seconds;
     if (nextTickSeconds <= 0) nextTickSeconds += 900; // Koreksi jika negatif
 
-    await scheduleItem("😄 Happy Reset", "Happy bar just ticked.", nextTickSeconds);
+    await scheduleItem("😄 Happy Reset", "Happy is topped up—if you’ve been waiting to train, this is your moment to make it count., nextTickSeconds);
 
     // --- C. COOLDOWNS ---
 
     // 💊 Drug
     const drugCooldown = data.cooldowns?.drug ?? 0;
     if (drugCooldown > 0) {
-        await scheduleItem("💊 Drug Ready", "Drug cooldown ended. Pop a Xanax?", drugCooldown);
+        await scheduleItem("💊 Drug Ready", "Drug cooldown is finally over—your next dose is available whenever you’re ready.", drugCooldown);
     }
 
     // 🍬 Booster
     const boosterCooldown = data.cooldowns?.booster ?? 0;
     if (boosterCooldown > 0) {
-        await scheduleItem("🍬 Booster Ready", "Can eat more candy/cans now.", boosterCooldown);
+        await scheduleItem("🍬 Booster Ready", "Booster cooldown is done—if you’re stacking or preparing for war, you can use one again.", boosterCooldown);
     }
 
     // 🏥 Hospital - Ambil dari profile.status jika state = "Hospital"
     if (data.profile?.status?.state === "Hospital" && data.profile.status.until) {
         const secondsLeft = data.profile.status.until - now;
         if (secondsLeft > 0) {
-            await scheduleItem("🏥 Out of Hospital", "You are healthy again.", secondsLeft);
+            await scheduleItem("🏥 Out of Hospital", "You’re out of the hospital—get back to your routine, or jump straight back into the action.", secondsLeft);
         }
     }
 
@@ -148,7 +148,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (data.profile?.status?.state === "Jail" && data.profile.status.until) {
         const secondsLeft = data.profile.status.until - now;
         if (secondsLeft > 0) {
-            await scheduleItem("⚖️ Free from Jail", "You are released from jail.", secondsLeft);
+            await scheduleItem("⚖️ Free from Jail", "You’re free again—go handle your stuff, and maybe keep a low profile for a bit.", secondsLeft);
         }
     }
 
@@ -157,7 +157,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (educationUntil > 0) {
         const secondsLeft = educationUntil - now;
         if (secondsLeft > 0) {
-            await scheduleItem("🎓 Education Complete", "Course finished!", secondsLeft);
+            await scheduleItem("🎓 Education Complete", "Your education course just finished—enroll in the next one so you keep progressing nonstop.", secondsLeft);
         }
     }
 

@@ -10,6 +10,7 @@ interface UserNotificationStatus {
   happy_full: boolean;
   life_full: boolean;
   travel_landed: boolean;
+travel_soon: boolean;
   drugs_ready: boolean;
   booster_ready: boolean;
   medical_out: boolean;

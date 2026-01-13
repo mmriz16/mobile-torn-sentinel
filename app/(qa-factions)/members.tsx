@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../src/components/ui/card";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
@@ -23,6 +23,8 @@ export default function MemberFaction() {
     const [filter, setFilter] = useState<'All' | 'Okay' | 'Travel' | 'Hospital'>('All');
     // Tick state to force re-render every second for countdown
     const [tick, setTick] = useState(0);
+    const [isFocused, setIsFocused] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Initial load
     useEffect(() => {
@@ -94,6 +96,11 @@ export default function MemberFaction() {
         : [];
 
     const filteredMembers = sortedMembers.filter(member => {
+        // First apply search filter
+        if (searchQuery && !member.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+            return false;
+        }
+        // Then apply status filter
         if (filter === 'All') return true;
         if (filter === 'Okay') return member.status.state === 'Okay';
         if (filter === 'Travel') return ['Traveling', 'Abroad'].includes(member.status.state);
@@ -135,18 +142,43 @@ export default function MemberFaction() {
             <TitleBar title="Member List" />
             <View className="flex-1" style={{ padding: hs(16), gap: vs(10) }}>
 
+                {/* Search Bar */}
                 <View className="flex-row items-center" style={{ gap: hs(8) }}>
-                    <TouchableOpacity onPress={() => setFilter('All')}>
-                        <Text className={`rounded-full ${filter === 'All' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(2), paddingHorizontal: hs(8) }}>All ({sortedMembers.length})</Text>
+                    <TextInput
+                        className="bg-tactical-900 border"
+                        placeholder="Search Members..."
+                        placeholderTextColor="#A8A29E"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        onFocus={() => setIsFocused(true)}
+                        onBlur={() => setIsFocused(false)}
+                        selectionColor="#F59E0B"
+                        style={{
+                            color: "#F59E0B",
+                            flex: 1,
+                            padding: ms(14),
+                            borderRadius: ms(8),
+                            borderWidth: 1,
+                            borderColor: isFocused ? "#44403C" : "#292524",
+                            // @ts-ignore - Web only property
+                            outlineStyle: 'none' as any
+                        }}
+                    />
+                </View>
+
+                {/* Filter */}
+                <View className="flex-row items-center" style={{ gap: hs(8) }}>
+                    <TouchableOpacity className="flex-1" onPress={() => setFilter('All')}>
+                        <Text className={`text-center rounded-full ${filter === 'All' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(4), paddingHorizontal: hs(8) }}>All ({sortedMembers.length})</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setFilter('Okay')}>
-                        <Text className={`rounded-full ${filter === 'Okay' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(2), paddingHorizontal: hs(8) }}>Okay ({sortedMembers.filter(member => member.status.state === 'Okay').length})</Text>
+                    <TouchableOpacity className="flex-1" onPress={() => setFilter('Okay')}>
+                        <Text className={`text-center rounded-full ${filter === 'Okay' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(4), paddingHorizontal: hs(8) }}>Okay ({sortedMembers.filter(member => member.status.state === 'Okay').length})</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setFilter('Travel')}>
-                        <Text className={`rounded-full ${filter === 'Travel' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(2), paddingHorizontal: hs(8) }}>Travel ({sortedMembers.filter(member => ['Traveling', 'Abroad'].includes(member.status.state)).length})</Text>
+                    <TouchableOpacity className="flex-1" onPress={() => setFilter('Travel')}>
+                        <Text className={`text-center rounded-full ${filter === 'Travel' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(4), paddingHorizontal: hs(8) }}>Travel ({sortedMembers.filter(member => ['Traveling', 'Abroad'].includes(member.status.state)).length})</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setFilter('Hospital')}>
-                        <Text className={`rounded-full ${filter === 'Hospital' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(2), paddingHorizontal: hs(8) }}>Hospital ({sortedMembers.filter(member => member.status.state === 'Hospital').length})</Text>
+                    <TouchableOpacity className="flex-1" onPress={() => setFilter('Hospital')}>
+                        <Text className={`text-center rounded-full ${filter === 'Hospital' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(4), paddingHorizontal: hs(8) }}>Hospital ({sortedMembers.filter(member => member.status.state === 'Hospital').length})</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -172,13 +204,28 @@ export default function MemberFaction() {
                         renderItem={({ item: member }) => {
                             const travelTime = getTravelTimeDisplay(member);
                             const statusTime = getStatusTimeDisplay(member);
+
+                            // Determine card colors based on status
+                            const isTravel = ['Traveling', 'Abroad'].includes(member.status.state);
+                            const isHospital = member.status.state === 'Hospital';
+                            const cardBg = isHospital ? '#321D1E' : isTravel ? '#1B272C' : '#1B2922';
+                            const cardBorder = isHospital ? 'rgba(244, 63, 94, 0.4)' : isTravel ? 'rgba(14, 165, 233, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+
                             return (
-                                <Card className="flex-row justify-between items-center" style={{ padding: vs(16) }}>
+                                <Card
+                                    className="flex-row justify-between items-center"
+                                    style={{
+                                        padding: vs(16),
+                                        backgroundColor: cardBg,
+                                        borderWidth: 1,
+                                        borderColor: cardBorder
+                                    }}
+                                >
                                     <View className="flex-col justify-between">
                                         <View className="flex-row items-center" style={{ gap: vs(4) }}>
                                             <Text className="text-white/50 CamelCase bg-tactical-950" style={{ fontFamily: "Inter_500Medium", fontSize: ms(10), paddingVertical: vs(2), paddingHorizontal: hs(4) }}>Level {member.level}</Text>
                                             <Text className="text-white/50 CamelCase" style={{ fontFamily: "Inter_500Medium", fontSize: ms(10) }}>· {member.position}</Text>
-                                            <Text className="text-white/50 CamelCase" style={{ fontFamily: "Inter_500Medium", fontSize: ms(10) }}>· {member.days_in_faction} Days</Text>
+                                            <Text className="text-white/50 CamelCase" style={{ fontFamily: "Inter_500Medium", fontSize: ms(10) }}>· {member.days_in_faction.toLocaleString('en-US')} Days</Text>
                                             {member.isAppUser && (
                                                 <Text className="text-accent-yellow bg-tactical-950 rounded-full" style={{ fontFamily: "Inter_500Medium", fontSize: ms(8), paddingVertical: vs(1), paddingHorizontal: hs(4) }}>📱</Text>
                                             )}

@@ -450,9 +450,11 @@ export async function fetchRankedWars(factionId?: number): Promise<RankedWarsRes
 export function formatTimeRemaining(seconds: number): string {
     if (seconds <= 0) return "Ready";
 
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    // Ensure we're working with integers to avoid floating point display issues
+    const totalSeconds = Math.floor(seconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = Math.floor(totalSeconds % 60);
 
     if (hours > 0) {
         return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
@@ -484,7 +486,44 @@ export function formatFactionStatus(status: FactionMemberStatus): string {
         return desc.toUpperCase();
     }
 
-    return status.description;
+    // Handle Hospital state
+    if (status.state === 'Hospital') {
+        const desc = status.description;
+        // Check for specific hospital location (e.g., "In an Argentinian hospital for X mins")
+        const locationMatch = desc.match(/In (?:a|an) (\w+) hospital/i);
+        if (locationMatch) {
+            return `IN ${locationMatch[1].toUpperCase()} HOSPITAL`;
+        }
+        return 'IN HOSPITAL';
+    }
+
+    // Handle Jail state
+    if (status.state === 'Jail') {
+        return 'IN JAIL';
+    }
+
+    // Handle Federal state
+    if (status.state === 'Federal') {
+        return 'IN FEDERAL';
+    }
+
+    let desc = status.description;
+
+    // Handle Traveling state
+    if (status.state === 'Traveling') {
+        // "Traveling to Mexico" -> "TO MEXICO"
+        // "Returning to Torn from Mexico" -> "TO TORN"
+        if (desc.includes('Returning to Torn')) return 'TO TORN';
+        desc = desc.replace(/^Traveling to /i, 'TO ');
+    }
+
+    // Handle Abroad state
+    if (status.state === 'Abroad') {
+        // "In Mexico" -> "IN MEXICO"
+        desc = desc.replace(/^In /i, 'IN ');
+    }
+
+    return desc.toUpperCase();
 }
 
 // Format large numbers with commas

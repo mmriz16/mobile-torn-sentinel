@@ -389,44 +389,46 @@ export default function Home() {
 
                     {/* Travel Card - Only show when actively traveling */}
                     {travel && travel.time_left > 0 && (
-                        <Card style={{ paddingTop: vs(14) }}>
-                            <View className="flex-row items-center justify-between" style={{ paddingHorizontal: hs(14) }}>
-                                <View className="flex-1">
-                                    <Text className="font-mono text-white/80" style={{ fontSize: ms(10) }} numberOfLines={1}>
-                                        {new Date(travel.departed_at * 1000).toLocaleTimeString('en-GB', {
-                                            hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
-                                        })}
-                                    </Text>
-                                    <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>
-                                        {originCity}
-                                    </Text>
+                        <TouchableOpacity activeOpacity={1} onPress={() => router.push('/(qa-home)/travel')}>
+                            <Card style={{ paddingTop: vs(14) }}>
+                                <View className="flex-row items-center justify-between" style={{ paddingHorizontal: hs(14) }}>
+                                    <View className="flex-1">
+                                        <Text className="font-mono text-white/80" style={{ fontSize: ms(10) }} numberOfLines={1}>
+                                            {new Date(travel.departed_at * 1000).toLocaleTimeString('en-GB', {
+                                                hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+                                            })}
+                                        </Text>
+                                        <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>
+                                            {originCity}
+                                        </Text>
+                                    </View>
+                                    <View className="flex-col items-center justify-center">
+                                        <TravelLoader />
+                                        <Text className="font-mono text-accent-blue" style={{ fontSize: ms(10) }} numberOfLines={1}>
+                                            {formatTimeRemaining(travelTimer)}
+                                        </Text>
+                                    </View>
+                                    <View className="flex-1 items-end">
+                                        <Text className="font-mono text-white/80" style={{ fontSize: ms(10) }} numberOfLines={1}>
+                                            {new Date(travel.arrival_at * 1000).toLocaleTimeString('en-GB', {
+                                                hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+                                            })}
+                                        </Text>
+                                        <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>
+                                            {travel.destination}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View className="flex-col items-center justify-center">
-                                    <TravelLoader />
-                                    <Text className="font-mono text-accent-blue" style={{ fontSize: ms(10) }} numberOfLines={1}>
-                                        {formatTimeRemaining(travelTimer)}
-                                    </Text>
+                                <View style={{ marginTop: vs(12) }}>
+                                    <ProgressBar
+                                        value={travelProgress}
+                                        height={ms(4)}
+                                        trackClassName="bg-tactical-950"
+                                        fillClassName="bg-accent-blue"
+                                    />
                                 </View>
-                                <View className="flex-1 items-end">
-                                    <Text className="font-mono text-white/80" style={{ fontSize: ms(10) }} numberOfLines={1}>
-                                        {new Date(travel.arrival_at * 1000).toLocaleTimeString('en-GB', {
-                                            hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
-                                        })}
-                                    </Text>
-                                    <Text className="text-white" style={{ fontFamily: 'Inter_900Black', fontSize: ms(18) }}>
-                                        {travel.destination}
-                                    </Text>
-                                </View>
-                            </View>
-                            <View style={{ marginTop: vs(12) }}>
-                                <ProgressBar
-                                    value={travelProgress}
-                                    height={ms(4)}
-                                    trackClassName="bg-tactical-950"
-                                    fillClassName="bg-accent-blue"
-                                />
-                            </View>
-                        </Card>
+                            </Card>
+                        </TouchableOpacity>
                     )}
 
                     {/* KPI Section */}
@@ -572,8 +574,8 @@ export default function Home() {
                                             return (
                                                 <>
                                                     <View className="flex-row items-end" style={{ gap: hs(4) }}>
-                                                        <Text className="text-white" style={{ fontSize: ms(18), fontFamily: 'JetBrainsMono_800ExtraBold' }}>{currentChain}</Text>
-                                                        <Text className="text-white/50 font-mono" style={{ fontSize: ms(10), paddingBottom: vs(4) }}>/{displayMax}</Text>
+                                                        <Text className="text-white" style={{ fontSize: ms(18), fontFamily: 'JetBrainsMono_800ExtraBold' }}>{currentChain.toLocaleString('en-US')}</Text>
+                                                        <Text className="text-white/50 font-mono" style={{ fontSize: ms(10), paddingBottom: vs(4) }}>/{displayMax.toLocaleString('en-US')}</Text>
                                                     </View>
                                                     <View style={{ marginTop: vs(10) }}>
                                                         <ProgressBar

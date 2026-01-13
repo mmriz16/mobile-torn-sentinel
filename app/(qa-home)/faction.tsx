@@ -10,10 +10,10 @@ import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import { AVAILABLE_FACTION_SHORTCUTS, DEFAULT_FACTION_SHORTCUTS } from "../../src/constants/shortcuts";
 import { syncFactionData } from "../../src/services/faction-service";
-import { FactionBasicData, RankedWarsResponse, fetchFactionBasic, fetchRankedWars, formatTimeRemaining } from "../../src/services/torn-api";
+import { FactionBasicData, RankedWarsResponse, TornUserData, fetchFactionBasic, fetchRankedWars, fetchUserData, formatFactionStatus, formatTimeRemaining } from "../../src/services/torn-api";
 
 import { LinearGradient } from "expo-linear-gradient";
-import { Image, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
 import { TitleBar } from "../../src/components/ui/title-bar";
@@ -26,18 +26,32 @@ export default function Faction() {
     const [activeShortcuts, setActiveShortcuts] = useState<string[]>(DEFAULT_FACTION_SHORTCUTS);
     const [factionData, setFactionData] = useState<FactionBasicData | null>(null);
     const [rankedWars, setRankedWars] = useState<RankedWarsResponse | null>(null);
+    const [userData, setUserData] = useState<TornUserData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    // Tick state to force re-render every second for countdown
+    const [tick, setTick] = useState(0);
+    // Chain end time (timestamp in ms) for countdown calculation
+    const [chainEndTime, setChainEndTime] = useState(0);
 
     useEffect(() => {
         loadShortcuts();
         loadFactionData();
     }, []);
 
+    // Countdown timer - update every second
+    useEffect(() => {
+        const countdownInterval = setInterval(() => {
+            setTick(prev => prev + 1);
+        }, 1000);
+        return () => clearInterval(countdownInterval);
+    }, []);
+
     const loadFactionData = async () => {
         setIsLoading(true);
-        const [basic, wars] = await Promise.all([
+        const [basic, wars, user] = await Promise.all([
             fetchFactionBasic(),
-            fetchRankedWars()
+            fetchRankedWars(),
+            fetchUserData()
         ]);
         if (basic) {
             setFactionData(basic);
@@ -45,6 +59,15 @@ export default function Faction() {
             syncFactionData(basic).catch(err => console.error('Failed to sync faction:', err));
         }
         if (wars) setRankedWars(wars);
+        if (user) {
+            setUserData(user);
+            // Calculate chain end time from current time + timeout seconds
+            if (user.bars?.chain?.timeout && user.bars.chain.timeout > 0) {
+                setChainEndTime(Date.now() + (user.bars.chain.timeout * 1000));
+            } else {
+                setChainEndTime(0);
+            }
+        }
         setIsLoading(false);
     };
 
@@ -87,49 +110,37 @@ export default function Faction() {
                 {/* Faction Info */}
                 <Card>
                     <View className="relative overflow-hidden">
-                        {/* Background Image - Absolute to fill container */}
-                        <Image
-                            className="mask-b-from-50%"
-                            source={require("../../assets/images/tag-team.jpg")}
-                            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '50%' }}
-                            resizeMode="cover"
-                        />
-                        <LinearGradient
-                            colors={['transparent', '#1C1917']}
-                            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, height: '50%' }}
-                        />
-
                         {/* Content dictated height */}
-                        <View style={{ padding: hs(16), gap: vs(4) }}>
+                        <View style={{ padding: hs(16), gap: vs(10) }}>
                             {/* Header */}
                             <View className="flex-row justify-between items-center">
-                                <View className="items-start gap-1">
+                                <View className="items-start">
                                     <Text className="text-white/50 text-[10px]" style={{ fontFamily: "Inter_500Medium" }}>Leader</Text>
                                     <Text className="text-white text-xl uppercase" style={{ fontFamily: "JetBrainsMono_400Regular" }}>{factionData?.members[String(factionData.leader)]?.name || "Unknown"}</Text>
                                 </View>
-                                <View className="items-end gap-1">
+                                <View className="items-end">
                                     <Text className="text-white/50 text-[10px]" style={{ fontFamily: "Inter_500Medium" }}>Co-Leader</Text>
                                     <Text className="text-white text-xl uppercase" style={{ fontFamily: "JetBrainsMono_400Regular" }}>{factionData?.members[String(factionData['co-leader'])]?.name || "Unknown"}</Text>
                                 </View>
                             </View>
 
-                            <Text className="text-accent-yellow text-4xl text-center" style={{ fontFamily: "Inter_800ExtraBold" }}>{factionData?.name || "Loading..."}</Text>
+                            <Text className="text-accent-yellow text-4xl text-center uppercase" style={{ fontFamily: "Inter_800ExtraBold" }}>{factionData?.name || "Loading..."}</Text>
 
                             {/* Footer Stats */}
                             <View className="flex-row justify-between items-center">
-                                <View className="items-start gap-1">
+                                <View className="items-start">
                                     <Text className="text-white/50 text-[10px]" style={{ fontFamily: "Inter_500Medium" }}>Best Chain</Text>
-                                    <Text className="text-white text-xl" style={{ fontFamily: "JetBrainsMono_400Regular" }}>{factionData?.best_chain?.toLocaleString() || "0"}</Text>
+                                    <Text className="text-white text-xl" style={{ fontFamily: "JetBrainsMono_400Regular" }}>{factionData?.best_chain?.toLocaleString('en-US') || "0"}</Text>
                                 </View>
-                                <View className="items-start gap-1">
+                                <View className="items-start">
                                     <Text className="text-white/50 text-[10px]" style={{ fontFamily: "Inter_500Medium" }}>Territories</Text>
                                     <Text className="text-white text-xl" style={{ fontFamily: "JetBrainsMono_400Regular" }}>{factionData?.['territory_wars'] ? Object.keys(factionData['territory_wars']).length : 0}</Text>
                                 </View>
-                                <View className="items-start gap-1">
+                                <View className="items-start">
                                     <Text className="text-white/50 text-[10px]" style={{ fontFamily: "Inter_500Medium" }}>Treaties</Text>
                                     <Text className="text-white text-xl" style={{ fontFamily: "JetBrainsMono_400Regular" }}>{factionData?.peace ? Object.keys(factionData.peace).length : 0}</Text>
                                 </View>
-                                <View className="items-start gap-1">
+                                <View className="items-start">
                                     <Text className="text-white/50 text-[10px]" style={{ fontFamily: "Inter_500Medium" }}>Member</Text>
                                     <Text className="text-white text-xl" style={{ fontFamily: "JetBrainsMono_400Regular" }}>{factionData ? `${Object.keys(factionData.members).length}/${factionData.capacity}` : "0/0"}</Text>
                                 </View>
@@ -143,18 +154,32 @@ export default function Faction() {
                 <View className="flex-row" style={{ gap: vs(10) }}>
                     <Card className="flex-1" style={{ padding: vs(16) }}>
                         <Text className="uppercase text-accent-yellow" style={{ fontFamily: "Inter_800ExtraBold", fontSize: ms(12) }}>Ranked War</Text>
-                        <Text className="uppercase text-white" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(18) }}>Active</Text>
+                        <Text className={`uppercase ${factionData?.rank_wars && Object.keys(factionData.rank_wars).length > 0 ? 'text-accent-green' : 'text-accent-red'}`} style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(18) }}>
+                            {factionData?.rank_wars && Object.keys(factionData.rank_wars).length > 0 ? 'ACTIVE' : 'INACTIVE'}
+                        </Text>
                     </Card>
                     <Card className="flex-1" style={{ padding: vs(16) }}>
                         <Text className="uppercase text-accent-yellow" style={{ fontFamily: "Inter_800ExtraBold", fontSize: ms(12) }}>Chain</Text>
-                        <View className="flex-row justify-between items-end">
-                            <Text className="uppercase text-white" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(18) }}>861/1000</Text>
-                            <Text className="text-white/50" style={{ fontFamily: "Inter_400Regular", fontSize: ms(10) }}>05:23:24</Text>
-                        </View>
+                        {(() => {
+                            const currentChain = userData?.bars?.chain?.current ?? 0;
+                            const CHAIN_MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+                            const nextMilestone = CHAIN_MILESTONES.find(m => m > currentChain) || 100000;
+                            // Calculate remaining time from stored end time
+                            const chainTimeLeft = chainEndTime > 0 ? Math.max(0, Math.floor((chainEndTime - Date.now()) / 1000)) : 0;
+                            return (
+                                <View className="flex-row justify-between items-end">
+                                    <Text className="uppercase text-white" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(18) }}>
+                                        {currentChain.toLocaleString('en-US')}/{nextMilestone.toLocaleString('en-US')}
+                                    </Text>
+                                    <Text className="text-white/50" style={{ fontFamily: "Inter_400Regular", fontSize: ms(10) }}>
+                                        {chainTimeLeft > 0 ? formatTimeRemaining(chainTimeLeft) : ''}
+                                    </Text>
+                                </View>
+                            );
+                        })()}
                     </Card>
                 </View>
 
-                {/* War Card */}
                 {/* War Card */}
                 <TouchableOpacity onPress={() => router.push('/(qa-factions)/ranked-war')}>
                     <Card>
@@ -170,16 +195,30 @@ export default function Faction() {
                         </View>
                         <View style={{ padding: vs(16), gap: vs(4) }}>
                             <View className="flex-row justify-between items-center">
-                                <Text className="text-accent-red" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{rankedWars?.rankedwars[0]?.factions.find(f => f.id !== factionData?.ID)?.score || 0}</Text>
+                                <Text className="text-accent-red" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars[0]?.factions.find(f => f.id !== factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
                                 <View className="flex-col items-center">
                                     <Text className="text-white/50" style={{ fontFamily: "Inter_400Regular", fontSize: ms(10) }}>Lead Target</Text>
-                                    <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(16) }}>{(Math.abs((rankedWars?.rankedwars[0]?.factions[0]?.score || 0) - (rankedWars?.rankedwars[0]?.factions[1]?.score || 0))).toLocaleString()}/{rankedWars?.rankedwars[0]?.target || 0}</Text>
+                                    <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(16) }}>{(Math.abs((rankedWars?.rankedwars[0]?.factions[0]?.score || 0) - (rankedWars?.rankedwars[0]?.factions[1]?.score || 0))).toLocaleString('en-US')}/{(rankedWars?.rankedwars[0]?.target || 0).toLocaleString('en-US')}</Text>
                                 </View>
-                                <Text className="text-accent-green" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{rankedWars?.rankedwars[0]?.factions.find(f => f.id === factionData?.ID)?.score || 0}</Text>
+                                <Text className="text-accent-green" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars[0]?.factions.find(f => f.id === factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
                             </View>
                             <View className="flex-row justify-between items-center">
                                 <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars[0]?.factions.find(f => f.id !== factionData?.ID)?.chain || 0}/25</Text>
-                                <Text className="text-accent-yellow" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{formatTimeRemaining(rankedWars?.rankedwars[0]?.end ? rankedWars.rankedwars[0].end - Date.now() / 1000 : 0)}</Text>
+                                <Text className="text-accent-yellow" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>
+                                    {(() => {
+                                        const warStart = rankedWars?.rankedwars[0]?.start || 0;
+                                        const warEnd = rankedWars?.rankedwars[0]?.end || 0;
+                                        const now = Math.floor(Date.now() / 1000);
+                                        const timeLeft = warEnd - now;
+                                        // If war is active, show countdown. If ended, show total duration.
+                                        if (timeLeft > 0) {
+                                            return formatTimeRemaining(timeLeft);
+                                        } else {
+                                            const totalDuration = warEnd - warStart;
+                                            return totalDuration > 0 ? formatTimeRemaining(totalDuration) : 'N/A';
+                                        }
+                                    })()}
+                                </Text>
                                 <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars[0]?.factions.find(f => f.id === factionData?.ID)?.chain || 0}/25</Text>
                             </View>
                         </View>
@@ -234,12 +273,12 @@ export default function Faction() {
                             <View className="flex-row" style={{ gap: vs(4) }}>
                                 <Text className="text-white/50 CamelCase bg-tactical-950" style={{ fontFamily: "Inter_500Medium", fontSize: ms(10), paddingVertical: vs(2), paddingHorizontal: hs(4) }}>Level {member.level}</Text>
                                 <Text className="text-white/50 CamelCase" style={{ fontFamily: "Inter_500Medium", fontSize: ms(10) }}>· {member.position}</Text>
-                                <Text className="text-white/50 CamelCase" style={{ fontFamily: "Inter_500Medium", fontSize: ms(10) }}>· {member.days_in_faction} Days</Text>
+                                <Text className="text-white/50 CamelCase" style={{ fontFamily: "Inter_500Medium", fontSize: ms(10) }}>· {member.days_in_faction.toLocaleString('en-US')} Days</Text>
                             </View>
                             <Text className="text-white uppercase" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(16) }}>{member.name}</Text>
                         </View>
                         <View className="flex-col justify-between items-end">
-                            <Text className={`${member.status.color === 'red' ? 'text-accent-red' : member.status.color === 'blue' ? 'text-accent-blue' : 'text-accent-green'} CamelCase`} style={{ fontFamily: "Inter_600SemiBold", fontSize: ms(14) }}>{member.status.state === 'Okay' ? 'Okay' : member.status.description}</Text>
+                            <Text className={`${member.status.color === 'red' ? 'text-accent-red' : member.status.color === 'blue' ? 'text-accent-blue' : 'text-accent-green'}`} style={{ fontFamily: "Inter_600SemiBold", fontSize: ms(14) }}>{formatFactionStatus(member.status)}</Text>
                             {member.status.until > 0 && (
                                 <Text className="text-white CamelCase" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(10) }}>{formatTimeRemaining(member.status.until - Date.now() / 1000)}</Text>
                             )}

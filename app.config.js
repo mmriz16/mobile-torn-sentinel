@@ -64,15 +64,15 @@ export default {
         extra: {
             router: {},
             eas: {
-                // ID Proyek yang terdaftar di JSON Anda
-                "projectId": "0d7c4841-e629-473e-b02d-ff02debf1347"
+                // ID Proyek untuk akun kao.zi
+                "projectId": "b2459cf2-1337-4d3b-b32b-4ef86da1b8cf"
             },
-            // --- BAGIAN INI YANG KITA TAMBAHKAN AGAR TIDAK ERROR JARINGAN ---
-            supabaseUrl: process.env.SUPABASE_URL,
-            supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+            // Hardcode for production builds (process.env not available in EAS builds)
+            supabaseUrl: process.env.SUPABASE_URL || "https://tbrdoygkaxqwennbrmxt.supabase.co",
+            supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRicmRveWdrYXhxd2VubmJybXh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3NzQyMDUsImV4cCI6MjA4MzM1MDIwNX0.xiBjMLYkNFiZ2yZsEbuO-6sbhK-cGxS4DZ7K7hizHj4",
         },
         updates: {
-            url: "https://u.expo.dev/0d7c4841-e629-473e-b02d-ff02debf1347"
+            url: "https://u.expo.dev/b2459cf2-1337-4d3b-b32b-4ef86da1b8cf"
         },
         runtimeVersion: "1.0.0",
     }

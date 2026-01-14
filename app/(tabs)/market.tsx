@@ -1,5 +1,6 @@
+import { CheckIcon, FunnelIcon, XIcon } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../src/components/ui/card";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
@@ -29,6 +30,7 @@ export default function Market() {
     const [categories, setCategories] = useState<CategoryCount[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
+    const [showFilterModal, setShowFilterModal] = useState(false);
 
     // Items state
     const [items, setItems] = useState<Item[]>([]);
@@ -42,34 +44,57 @@ export default function Market() {
             try {
                 setIsLoading(true);
 
-                // Get all distinct types with their counts
-                // Increase limit to cover all items (default is 1000)
-                const { data, error } = await supabase
+                // Get exact total count (not affected by row limit)
+                const { count: totalCount, error: countError } = await supabase
                     .from('items')
-                    .select('type')
-                    .limit(10000);
+                    .select('*', { count: 'exact', head: true });
 
-                if (error) {
-                    console.error('Error fetching categories:', error);
+                if (countError) {
+                    console.error('Error fetching count:', countError);
                     return;
                 }
 
-                if (data) {
-                    // Count items per category
-                    const countMap = new Map<string, number>();
-                    data.forEach(item => {
-                        const type = item.type || 'Unknown';
-                        countMap.set(type, (countMap.get(type) || 0) + 1);
-                    });
+                setTotalItems(totalCount || 0);
 
-                    // Convert to array and sort alphabetically
-                    const categoriesArray: CategoryCount[] = Array.from(countMap.entries())
-                        .map(([type, count]) => ({ type, count }))
-                        .sort((a, b) => a.type.localeCompare(b.type));
+                // Get category counts using RPC or multiple paginated queries
+                // Fetch in batches to get all items for category counting
+                const allTypes: string[] = [];
+                let offset = 0;
+                const batchSize = 1000;
+                let hasMore = true;
 
-                    setCategories(categoriesArray);
-                    setTotalItems(data.length);
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from('items')
+                        .select('type')
+                        .range(offset, offset + batchSize - 1);
+
+                    if (error) {
+                        console.error('Error fetching categories:', error);
+                        break;
+                    }
+
+                    if (data && data.length > 0) {
+                        allTypes.push(...data.map(item => item.type || 'Unknown'));
+                        offset += batchSize;
+                        hasMore = data.length === batchSize;
+                    } else {
+                        hasMore = false;
+                    }
                 }
+
+                // Count items per category
+                const countMap = new Map<string, number>();
+                allTypes.forEach(type => {
+                    countMap.set(type, (countMap.get(type) || 0) + 1);
+                });
+
+                // Convert to array and sort alphabetically
+                const categoriesArray: CategoryCount[] = Array.from(countMap.entries())
+                    .map(([type, count]) => ({ type, count }))
+                    .sort((a, b) => a.type.localeCompare(b.type));
+
+                setCategories(categoriesArray);
             } catch (err) {
                 console.error('Error:', err);
             } finally {
@@ -210,54 +235,106 @@ export default function Market() {
             <View className="flex-1" style={{ gap: vs(10), paddingTop: ms(10), paddingHorizontal: (16) }}>
 
                 {/* Search Bar */}
-                <View className="flex-row items-center" style={{ gap: hs(8) }}>
-                    <TextInput
-                        className="bg-tactical-900 border"
-                        placeholder="Search Xanax, Armalite..."
-                        placeholderTextColor="#A8A29E"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onFocus={() => setIsFocused(true)}
-                        onBlur={() => setIsFocused(false)}
-                        selectionColor="#F59E0B"
-                        style={{
-                            color: "#F59E0B",
-                            flex: 1,
-                            padding: ms(14),
-                            borderRadius: ms(8),
-                            borderWidth: 1,
-                            borderColor: isFocused ? "#44403C" : "#292524",
-                            // @ts-ignore - Web only property
-                            outlineStyle: 'none' as any
-                        }}
-                    />
+                <View className="flex-row" style={{ gap: vs(10) }}>
+                    <View className="flex-row flex-1 items-center" style={{ gap: hs(8) }}>
+                        <TextInput
+                            className="bg-tactical-900 border"
+                            placeholder="Search Xanax, Armalite..."
+                            placeholderTextColor="#A8A29E"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            onFocus={() => setIsFocused(true)}
+                            onBlur={() => setIsFocused(false)}
+                            selectionColor="#F59E0B"
+                            style={{
+                                color: "#F59E0B",
+                                flex: 1,
+                                padding: ms(14),
+                                borderRadius: ms(8),
+                                borderWidth: 1,
+                                borderColor: isFocused ? "#44403C" : "#292524",
+                                // @ts-ignore - Web only property
+                                outlineStyle: 'none' as any
+                            }}
+                        />
+                    </View>
+                    <TouchableOpacity
+                        className="flex justify-center items-center bg-accent-yellow aspect-square rounded-[8px]"
+                        style={{ padding: ms(10) }}
+                        onPress={() => setShowFilterModal(true)}
+                        activeOpacity={0.8}
+                    >
+                        <FunnelIcon size={ms(20)} color="#0C0A09" />
+                    </TouchableOpacity>
                 </View>
 
-                {/* Category Filter */}
-                <View style={{ height: vs(36) }}>
-                    <FlatList
-                        horizontal
-                        data={[{ type: 'All', count: totalItems }, ...categories]}
-                        keyExtractor={(item) => item.type}
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: hs(8), paddingRight: hs(16) }}
-                        renderItem={({ item: category }) => (
-                            <TouchableOpacity onPress={() => setFilter(category.type)}>
-                                <Text
-                                    className={`text-center rounded-full ${filter === category.type ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white/50 bg-tactical-900 border border-tactical-800'}`}
-                                    style={{
-                                        fontFamily: "Inter_500Medium",
-                                        fontSize: ms(12),
-                                        paddingVertical: vs(6),
-                                        paddingHorizontal: hs(14)
-                                    }}
-                                >
-                                    {category.type}
+                {/* Active Filter Badge */}
+                {filter !== 'All' && (
+                    <View className="flex-row items-center" style={{ gap: hs(8) }}>
+                        <TouchableOpacity
+                            className="flex-row items-center bg-accent-yellow/20 border border-accent-yellow rounded-full"
+                            style={{ paddingVertical: vs(4), paddingHorizontal: hs(12), gap: hs(6) }}
+                            onPress={() => setFilter('All')}
+                        >
+                            <Text className="text-accent-yellow" style={{ fontFamily: "Inter_500Medium", fontSize: ms(12) }}>
+                                {filter}
+                            </Text>
+                            <XIcon size={ms(14)} color="#F59E0B" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Category Filter Modal */}
+                <Modal
+                    visible={showFilterModal}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowFilterModal(false)}
+                >
+                    <View className="flex-1 justify-end bg-black/50">
+                        <View className="bg-tactical-950 rounded-t-[20px] border-t border-tactical-800" style={{ maxHeight: '70%' }}>
+                            {/* Header */}
+                            <View className="flex-row justify-between items-center border-b border-tactical-800" style={{ padding: ms(16) }}>
+                                <Text className="text-white" style={{ fontFamily: "Inter_700Bold", fontSize: ms(18) }}>
+                                    Filter by Category
                                 </Text>
-                            </TouchableOpacity>
-                        )}
-                    />
-                </View>
+                                <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                                    <XIcon size={ms(24)} color="#A8A29E" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Category List */}
+                            <ScrollView style={{ padding: ms(16) }} contentContainerStyle={{ gap: vs(8), paddingBottom: vs(40) }}>
+                                {[{ type: 'All', count: totalItems }, ...categories].map((category) => (
+                                    <TouchableOpacity
+                                        key={category.type}
+                                        className={`flex-row justify-between items-center rounded-[10px] border ${filter === category.type ? 'bg-accent-yellow/20 border-accent-yellow' : 'bg-tactical-900 border-tactical-800'}`}
+                                        style={{ padding: ms(14) }}
+                                        onPress={() => {
+                                            setFilter(category.type);
+                                            setShowFilterModal(false);
+                                        }}
+                                    >
+                                        <View className="flex-row items-center" style={{ gap: hs(12) }}>
+                                            <Text
+                                                className={filter === category.type ? 'text-accent-yellow' : 'text-white'}
+                                                style={{ fontFamily: "Inter_500Medium", fontSize: ms(14) }}
+                                            >
+                                                {category.type}
+                                            </Text>
+                                            <Text className="text-white/30" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>
+                                                {category.count}
+                                            </Text>
+                                        </View>
+                                        {filter === category.type && (
+                                            <CheckIcon size={ms(20)} color="#F59E0B" />
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    </View>
+                </Modal>
 
                 <View className="flex-row justify-between items-center">
                     <Text className="text-white/50 uppercase" style={{ fontFamily: "Inter_800ExtraBold", fontSize: ms(14) }}>Market List</Text>

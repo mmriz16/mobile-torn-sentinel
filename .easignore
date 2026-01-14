@@ -5,3 +5,14 @@ node_modules/
 credentials/
 *.p12
 *.jks
+.git/
+.github/
+dist/
+supabase/
+*.md
+debug.keystore
+service-account.json
+app.json.backup
+.env
+*.tsbuildinfo
+/android

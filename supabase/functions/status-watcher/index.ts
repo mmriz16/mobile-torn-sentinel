@@ -90,7 +90,16 @@ serve(async (_req) => {
 
     console.log(`📊 Ditemukan ${statusMap.size} notification status(es)`);
 
-    const notifications: { to: string; title: string; body: string; sound: string }[] = [];
+    // Tambahkan priority: high dan channelId untuk heads-up popup notification di Android
+    const notifications: {
+      to: string;
+      title: string;
+      body: string;
+      sound: string;
+      priority: 'high' | 'normal' | 'default';
+      channelId: string;
+      _contentAvailable: boolean;
+    }[] = [];
 
     for (const user of users) {
       try {
@@ -147,7 +156,15 @@ serve(async (_req) => {
             return;
           }
 
-          notifications.push({ to: user.push_token, title, body, sound: "default" });
+          notifications.push({
+            to: user.push_token,
+            title,
+            body,
+            sound: "default",
+            priority: "high",
+            channelId: "torn-sentinel-alerts",
+            _contentAvailable: true,
+          });
           console.log(`  📤 PUSH: ${title} untuk user ${user.id} (DB updated)`);
         };
 
@@ -329,6 +346,9 @@ serve(async (_req) => {
               title: "🔔 Test Notification",
               body: "Push notification berhasil!",
               sound: "default",
+              priority: "high",
+              channelId: "torn-sentinel-alerts",
+              _contentAvailable: true,
             });
             console.log(`  🧪 TEST: Sending test notification untuk user ${user.id}`);
           } else {

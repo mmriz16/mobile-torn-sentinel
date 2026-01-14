@@ -74,19 +74,28 @@ serve(async (req) => {
 
     // 5. Transformasi Data Torn -> Tabel items (HANYA HOT ITEMS)
     // Filter dulu ID yang ada di hotItemIds
+    let priceChangesDetected = 0;
+
     const formattedItems = itemIds
       .filter(id => hotItemIds.has(Number(id)))
       .map((id) => {
         const item = itemsMap[id];
         const itemId = Number(id);
-        const currentPrice = item.market_value || 0;
-        const lastPrice = hotItemsMap.get(itemId) || null;
+        const newMarketValue = item.market_value || 0;
+        const dbCurrentPrice = hotItemsMap.get(itemId) || 0;
 
         // Hitung persentase perubahan harga
+        // Bandingkan harga baru dari API dengan harga yang tersimpan di DB
         let priceChangePercent = 0;
-        if (lastPrice && lastPrice > 0) {
-          priceChangePercent = ((currentPrice - lastPrice) / lastPrice) * 100;
+        let lastPriceToSave = dbCurrentPrice; // Default: simpan current price sebagai last_price
+
+        // Jika harga berubah, update last_price dan hitung persentase
+        if (dbCurrentPrice > 0 && newMarketValue !== dbCurrentPrice) {
+          priceChangePercent = ((newMarketValue - dbCurrentPrice) / dbCurrentPrice) * 100;
           priceChangePercent = Math.round(priceChangePercent * 100) / 100;
+          priceChangesDetected++;
+
+          console.log(`  💰 ${item.name}: $${dbCurrentPrice.toLocaleString()} → $${newMarketValue.toLocaleString()} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent}%)`);
         }
 
         return {
@@ -97,7 +106,7 @@ serve(async (req) => {
           weapon_type: item.weapon_type || null,
           buy_price: item.buy_price || 0,
           sell_price: item.sell_price || 0,
-          market_value: item.market_value || 0,
+          market_value: newMarketValue,
           circulation: item.circulation || 0,
           image_url: item.image || null,
           updated_at: new Date().toISOString(),
@@ -108,11 +117,13 @@ serve(async (req) => {
           coverage: item.coverage ? JSON.stringify(item.coverage) : null,
           requirement: item.requirement || null,
           // Price tracking fields
-          current_price: currentPrice,
-          last_price: lastPrice,
+          current_price: newMarketValue,
+          last_price: lastPriceToSave,
           price_change_percent: priceChangePercent
         };
       });
+
+    console.log(`📊 Detected ${priceChangesDetected} price changes out of ${formattedItems.length} hot items.`);
 
     // 6. Batch Insert items ke Supabase
     const BATCH_SIZE = 500;

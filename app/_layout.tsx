@@ -25,6 +25,7 @@ import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "../global.css";
 import { GridPattern } from "../src/components/ui/grid-pattern";
+import { setupNotificationChannel } from "../src/utils/notifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -61,6 +62,9 @@ export default function RootLayout() {
       setHasApiKey(!!apiKey);
     }
     checkApiKey();
+
+    // Setup Android notification channel for heads-up popup notifications
+    setupNotificationChannel();
   }, []);
 
   useEffect(() => {

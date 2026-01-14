@@ -5,7 +5,11 @@ Update EAS (Only Android):
 eas update --platform android --branch production --message "fix supabase connection config"
 
 Build AAB :
-java -jar bundletool.jar build-apks --bundle=app-release.aab --output=app-release.apks --ks=torn-key.jks --ks-pass=pass:"Kaozi!86g27." --ks-key-alias=torn-sentinel --key-pass=pass:"Kaozi!86g27." --mode=universal
+java -jar bundletool.jar build-apks --bundle=app-release.aab --output=app.apks --mode=universal --ks=torn-sentinel.keystore --ks-key-alias=tornsentinel --ks-pass=pass:tornsentinel123 --key-pass=pass:tornsentinel123
+
+Extract APK :
+Rename-Item app.apks app.zip
+Expand-Archive app.zip -DestinationPath apk_output
 
 Check Password :
 eas credentials

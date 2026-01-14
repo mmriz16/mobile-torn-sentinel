@@ -42,3 +42,9 @@ entrypoint = "./functions/sync-items/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/sync-items/*.html" ]
+
+[functions.sync-bazaar-prices]
+enabled = true
+verify_jwt = true
+import_map = "./functions/sync-bazaar-prices/deno.json"
+entrypoint = "./functions/sync-bazaar-prices/index.ts"

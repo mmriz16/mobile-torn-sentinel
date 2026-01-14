@@ -21,6 +21,9 @@ interface TornData {
     education?: { current?: { id?: number; until?: number } | null };
 }
 
+// Channel ID untuk notifikasi - harus sama dengan yang dikirim dari server
+export const NOTIFICATION_CHANNEL_ID = 'torn-sentinel-alerts';
+
 // Konfigurasi Notifikasi (Foreground) - Only set on native platforms
 if (Platform.OS !== 'web') {
     Notifications.setNotificationHandler({
@@ -32,6 +35,24 @@ if (Platform.OS !== 'web') {
             shouldShowList: true,
         }),
     });
+}
+
+// Setup Android Notification Channel dengan importance MAX untuk heads-up popup
+export async function setupNotificationChannel() {
+    if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL_ID, {
+            name: 'Torn Sentinel Alerts',
+            importance: Notifications.AndroidImportance.MAX, // MAX = heads-up popup
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF0000',
+            sound: 'default',
+            enableVibrate: true,
+            enableLights: true,
+            showBadge: true,
+            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        });
+        console.log('✅ Android notification channel created with MAX importance');
+    }
 }
 
 // Helper: Jadwalkan Notifikasi
@@ -108,7 +129,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (lifeFullTime > 0) {
         const secondsLeft = lifeFullTime - now;
         if (secondsLeft > 0) {
-            await scheduleItem("❤️ Life Full", "You’re back at full health—no need to play it safe anymore, you’re good to go.", secondsLeft);
+            await scheduleItem("❤️ Life Full", "You're back at full health—no need to play it safe anymore, you're good to go.", secondsLeft);
         }
     }
 
@@ -120,27 +141,27 @@ export async function scheduleAllNotifications(data: TornData) {
     let nextTickSeconds = ((15 - (minutes % 15)) * 60) - seconds;
     if (nextTickSeconds <= 0) nextTickSeconds += 900; // Koreksi jika negatif
 
-    await scheduleItem("😄 Happy Reset", "Happy is topped up—if you’ve been waiting to train, this is your moment to make it count., nextTickSeconds);
+    await scheduleItem("😄 Happy Reset", "Happy is topped up—if you've been waiting to train, this is your moment to make it count.", nextTickSeconds);
 
     // --- C. COOLDOWNS ---
 
     // 💊 Drug
     const drugCooldown = data.cooldowns?.drug ?? 0;
     if (drugCooldown > 0) {
-        await scheduleItem("💊 Drug Ready", "Drug cooldown is finally over—your next dose is available whenever you’re ready.", drugCooldown);
+        await scheduleItem("💊 Drug Ready", "Drug cooldown is finally over—your next dose is available whenever you're ready.", drugCooldown);
     }
 
     // 🍬 Booster
     const boosterCooldown = data.cooldowns?.booster ?? 0;
     if (boosterCooldown > 0) {
-        await scheduleItem("🍬 Booster Ready", "Booster cooldown is done—if you’re stacking or preparing for war, you can use one again.", boosterCooldown);
+        await scheduleItem("🍬 Booster Ready", "Booster cooldown is done—if you're stacking or preparing for war, you can use one again.", boosterCooldown);
     }
 
     // 🏥 Hospital - Ambil dari profile.status jika state = "Hospital"
     if (data.profile?.status?.state === "Hospital" && data.profile.status.until) {
         const secondsLeft = data.profile.status.until - now;
         if (secondsLeft > 0) {
-            await scheduleItem("🏥 Out of Hospital", "You’re out of the hospital—get back to your routine, or jump straight back into the action.", secondsLeft);
+            await scheduleItem("🏥 Out of Hospital", "You're out of the hospital—get back to your routine, or jump straight back into the action.", secondsLeft);
         }
     }
 
@@ -148,7 +169,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (data.profile?.status?.state === "Jail" && data.profile.status.until) {
         const secondsLeft = data.profile.status.until - now;
         if (secondsLeft > 0) {
-            await scheduleItem("⚖️ Free from Jail", "You’re free again—go handle your stuff, and maybe keep a low profile for a bit.", secondsLeft);
+            await scheduleItem("⚖️ Free from Jail", "You're free again—go handle your stuff, and maybe keep a low profile for a bit.", secondsLeft);
         }
     }
 

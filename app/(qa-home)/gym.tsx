@@ -19,7 +19,7 @@ import { TitleBar } from "../../src/components/ui/title-bar";
 import { GYM_DATA, GYM_ID_TO_NAME, GYM_NAMES } from "../../src/constants/gym";
 import { getJumpPresetItemIds, JUMP_PRESETS } from "../../src/constants/items";
 import { fetchItemDetailsFromSupabase } from "../../src/services/item-service";
-import { fetchActiveGym, fetchBattleStats, fetchGymModifier, fetchItemMarketPrices, fetchUserData, formatNumber, TornBattleStats, TornItem, TornUserData } from "../../src/services/torn-api";
+import { fetchGymDataCombined, fetchItemMarketPrices, formatNumber, TornBattleStats, TornItem, TornUserData } from "../../src/services/torn-api";
 import { gainPerTrain, simulateSession } from "../../src/utils/gym-calculator";
 import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from '../../src/utils/responsive';
 
@@ -207,13 +207,8 @@ export default function Gym() {
         async function loadData() {
             setIsLoadingStats(true);
 
-            // Fetch battle stats, user data, active gym, and gym modifier in parallel
-            const [stats, user, activeGymId, modifier] = await Promise.all([
-                fetchBattleStats(),
-                fetchUserData(),
-                fetchActiveGym(),
-                fetchGymModifier()
-            ]);
+            // OPTIMIZED: Single combined call (2 API calls instead of 4)
+            const { battleStats: stats, userData: user, activeGym: activeGymId, gymModifier: modifier } = await fetchGymDataCombined();
 
             setBattleStats(stats);
             setUserData(user);

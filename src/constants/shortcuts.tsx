@@ -1,4 +1,4 @@
-import { Banknote, Bell, Coins, Dumbbell, FileUser, Flag, LandPlot, Link, Plane, Settings, ShoppingBag, Swords, Users } from 'lucide-react-native';
+import { Banknote, Bell, Coins, Dumbbell, FileUser, Flag, LandPlot, Landmark, Link, Plane, Settings, ShoppingBag, Swords, Users } from 'lucide-react-native';
 
 // Import local SVGs
 
@@ -38,6 +38,13 @@ const AVAILABLE_HOME_SHORTCUTS: ShortcutItem[] = [
         icon: Coins,
         isSvg: false,
         route: '/(qa-home)/networth'
+    },
+    {
+        id: 'bank',
+        label: 'Bank',
+        icon: Landmark,
+        isSvg: false,
+        route: '/(qa-home)/bank'
     },
     {
         id: 'market',

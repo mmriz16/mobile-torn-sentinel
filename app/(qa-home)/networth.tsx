@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Logo from "../../assets/logo.svg";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
 import { TitleBar } from "../../src/components/ui/title-bar";
-import { fetchNetworth, fetchUserData, formatCurrency, TornNetworth, TornUserData } from "../../src/services/torn-api";
+import { fetchUserDataWithNetworth, formatCurrency, TornNetworth, TornUserData } from "../../src/services/torn-api";
 import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from "../../src/utils/responsive";
 
 // Human-readable labels for networth fields
@@ -77,10 +77,8 @@ export default function Networth() {
         if (isInitialLoad.current) {
             setIsLoading(true);
         }
-        const [networthData, userDataResult] = await Promise.all([
-            fetchNetworth(),
-            fetchUserData()
-        ]);
+        // OPTIMIZED: Single API call for user data + networth (was 2 calls)
+        const { userData: userDataResult, networth: networthData } = await fetchUserDataWithNetworth();
         setNetworth(networthData);
         setUserData(userDataResult);
         setIsLoading(false);

@@ -1,6 +1,11 @@
 import { supabase } from './supabase';
 
-export const syncNetworthAndGetProfit = async (tornId: number, currentNetworth: number) => {
+export interface ProfitData {
+    profit: number;
+    percentChange: number;
+}
+
+export const syncNetworthAndGetProfit = async (tornId: number, currentNetworth: number): Promise<ProfitData> => {
     try {
         const { data, error } = await supabase.rpc('record_and_get_profit', {
             p_torn_id: Math.floor(tornId),           // Pastikan integer
@@ -8,9 +13,19 @@ export const syncNetworthAndGetProfit = async (tornId: number, currentNetworth: 
         });
 
         if (error) throw error;
-        return data;
+
+        // Calculate percentage change
+        // profit = currentNetworth - previousNetworth
+        // previousNetworth = currentNetworth - profit
+        const profit = data || 0;
+        const previousNetworth = currentNetworth - profit;
+        const percentChange = previousNetworth > 0
+            ? ((profit / previousNetworth) * 100)
+            : 0;
+
+        return { profit, percentChange };
     } catch (err) {
         console.error("Failed to sync profit:", err);
-        return 0;
+        return { profit: 0, percentChange: 0 };
     }
 };

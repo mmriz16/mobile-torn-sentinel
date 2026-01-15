@@ -64,6 +64,7 @@ export interface TornMoney {
     vault: number;
     cayman_bank: number;
     city_bank: number | null;
+    city_bank_time_left: number | null;
     faction: number | null;
     daily_networth: number;
 }
@@ -137,6 +138,85 @@ let networthCache: TornNetworth | null = null;
 
 export function getNetworthCache(): TornNetworth | null {
     return networthCache;
+}
+
+// Bank rates interface
+export interface TornBankRates {
+    "1w": number;
+    "2w": number;
+    "1m": number;
+    "2m": number;
+    "3m": number;
+}
+
+// Cache for bank rates (refresh every 1 hour)
+let bankRatesCache: TornBankRates | null = null;
+let bankRatesCacheTime: number = 0;
+const BANK_RATES_CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+
+// Fetch bank interest rates
+export async function fetchBankRates(): Promise<TornBankRates | null> {
+    try {
+        // Return cached rates if still valid
+        if (bankRatesCache && Date.now() - bankRatesCacheTime < BANK_RATES_CACHE_DURATION) {
+            return bankRatesCache;
+        }
+
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        trackApiRequest();
+        const response = await fetch(`https://api.torn.com/torn/?selections=bank&key=${apiKey}`);
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error (bank rates):", data.error);
+            return bankRatesCache; // Return stale cache if available
+        }
+
+        bankRatesCache = data.bank;
+        bankRatesCacheTime = Date.now();
+        return bankRatesCache;
+    } catch (error) {
+        console.error("Failed to fetch bank rates:", error);
+        return bankRatesCache;
+    }
+}
+
+// City Bank investment details (from V1 API)
+export interface TornCityBankDetails {
+    amount: number;
+    time_left: number;
+}
+
+// Fetch city bank investment details (V1 API for time_left)
+export async function fetchCityBankDetails(): Promise<TornCityBankDetails | null> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        trackApiRequest();
+        const response = await fetch(`https://api.torn.com/user/?selections=money&key=${apiKey}`);
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error (city bank):", data.error);
+            return null;
+        }
+
+        // V1 returns city_bank as object {amount, time_left}
+        if (data.city_bank && typeof data.city_bank === 'object') {
+            return {
+                amount: data.city_bank.amount || 0,
+                time_left: data.city_bank.time_left || 0
+            };
+        }
+
+        return null;
+    } catch (error) {
+        console.error("Failed to fetch city bank details:", error);
+        return null;
+    }
 }
 
 export interface TornDrugStats {
@@ -262,7 +342,94 @@ export async function fetchDrugStats(playerId: number): Promise<TornDrugStats | 
     }
 }
 
-// Fetch user data (profile, bars, cooldowns, education, travel)
+// Combined fetch for user data + networth (OPTIMIZED: 2 parallel API calls instead of 2 sequential)
+export interface CombinedUserData {
+    userData: TornUserData | null;
+    networth: TornNetworth | null;
+}
+
+export async function fetchUserDataWithNetworth(): Promise<CombinedUserData> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return { userData: null, networth: null };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+        // PARALLEL fetch: V2 for user data (proper format), V1 for networth
+        // This ensures data format compatibility while reducing sequential wait time
+        trackApiRequest();
+        trackApiRequest();
+
+        const [userResponse, networthResponse] = await Promise.all([
+            fetch(
+                `${TORN_API_V2_BASE}/user?selections=profile,bars,cooldowns,education,travel,money,property&key=${apiKey}`,
+                { signal: controller.signal, cache: 'no-store' }
+            ),
+            fetch(
+                `https://api.torn.com/user/?selections=networth&key=${apiKey}`,
+                { signal: controller.signal, cache: 'no-store' }
+            )
+        ]);
+
+        clearTimeout(timeoutId);
+
+        const [userData, networthData] = await Promise.all([
+            userResponse.json(),
+            networthResponse.json()
+        ]);
+
+        // Process user data (V2 format - already matches TornUserData interface)
+        let resultUserData: TornUserData | null = null;
+        if (!userData.error) {
+            resultUserData = userData as TornUserData;
+        } else {
+            console.error("Torn API error (user):", userData.error);
+        }
+
+        // Process networth data (V1 format - needs transformation)
+        let resultNetworth: TornNetworth | null = null;
+        if (!networthData.error && networthData.networth) {
+            resultNetworth = {
+                personalstats: {
+                    networth: {
+                        total: networthData.networth.total || 0,
+                        wallet: networthData.networth.wallet || 0,
+                        vaults: networthData.networth.vault || 0,
+                        bank: networthData.networth.bank || 0,
+                        overseas_bank: networthData.networth.cayman || 0,
+                        points: networthData.networth.points || 0,
+                        inventory: networthData.networth.items || 0,
+                        display_case: networthData.networth.displaycase || 0,
+                        bazaar: networthData.networth.bazaar || 0,
+                        item_market: networthData.networth.itemmarket || 0,
+                        property: networthData.networth.properties || 0,
+                        stock_market: networthData.networth.stockmarket || 0,
+                        auction_house: networthData.networth.auctionhouse || 0,
+                        bookie: networthData.networth.bookie || 0,
+                        company: networthData.networth.company || 0,
+                        enlisted_cars: networthData.networth.enlistedcars || 0,
+                        piggy_bank: networthData.networth.piggybank || 0,
+                        pending: networthData.networth.pending || 0,
+                        loans: networthData.networth.loan || 0,
+                        unpaid_fees: networthData.networth.unpaidfees || 0,
+                        trade: networthData.networth.trade || 0,
+                    }
+                }
+            };
+            networthCache = resultNetworth;
+        } else if (networthData.error) {
+            console.error("Torn API error (networth):", networthData.error);
+        }
+
+        return { userData: resultUserData, networth: resultNetworth };
+    } catch (error) {
+        console.error("Failed to fetch combined user data:", error);
+        return { userData: null, networth: null };
+    }
+}
+
+// Fetch user data (profile, bars, cooldowns, education, travel) - Legacy function, prefer fetchUserDataWithNetworth
 export async function fetchUserData(): Promise<TornUserData | null> {
     try {
         const apiKey = await getApiKey();
@@ -271,7 +438,6 @@ export async function fetchUserData(): Promise<TornUserData | null> {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        trackApiRequest();
         trackApiRequest();
         const response = await fetch(
             `${TORN_API_V2_BASE}/user?selections=profile,bars,cooldowns,education,travel,money,property&key=${apiKey}`,
@@ -579,14 +745,27 @@ async function fetchXanaxAtTimestamp(timestamp?: number): Promise<number | null>
     }
 }
 
-// Fetch weekly xanax usage (Monday to now)
+// Cache for Monday xanax count - doesn't change during the week
+let mondayXanaxCache: { timestamp: number; value: number } | null = null;
+
+// Fetch weekly xanax usage (Monday to now) - OPTIMIZED with caching
 export async function fetchWeeklyXanaxUsage(): Promise<number> {
     const mondayTimestamp = getCurrentWeekMondayTimestamp();
 
-    // Fetch xanax count at start of week (Monday 00:00)
-    const mondayXanax = await fetchXanaxAtTimestamp(mondayTimestamp);
+    // Check if we have a valid cached Monday xanax count
+    let mondayXanax: number | null = null;
+    if (mondayXanaxCache && mondayXanaxCache.timestamp === mondayTimestamp) {
+        // Cache is valid for this week
+        mondayXanax = mondayXanaxCache.value;
+    } else {
+        // Fetch and cache Monday xanax count (1 API call, only once per week)
+        mondayXanax = await fetchXanaxAtTimestamp(mondayTimestamp);
+        if (mondayXanax !== null) {
+            mondayXanaxCache = { timestamp: mondayTimestamp, value: mondayXanax };
+        }
+    }
 
-    // Fetch current xanax count
+    // Fetch current xanax count (1 API call every time)
     const currentXanax = await fetchXanaxAtTimestamp();
 
     if (mondayXanax === null || currentXanax === null) {
@@ -809,6 +988,232 @@ export async function fetchGymModifier(): Promise<number> {
     } catch (error) {
         console.error("Failed to fetch perks:", error);
         return 1;
+    }
+}
+
+// =============================================================================
+// OPTIMIZED COMBINED FETCH FUNCTIONS WITH CACHING
+// =============================================================================
+
+// Global cache with TTL
+interface CacheEntry<T> {
+    data: T;
+    timestamp: number;
+    ttl: number; // TTL in milliseconds
+}
+
+const apiCache: {
+    battleStats?: CacheEntry<TornBattleStats>;
+    activeGym?: CacheEntry<number>;
+    gymModifier?: CacheEntry<number>;
+    factionBasic?: CacheEntry<FactionBasicData>;
+    perksData?: CacheEntry<string[]>;
+} = {};
+
+function getCached<T>(entry: CacheEntry<T> | undefined): T | null {
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > entry.ttl) return null;
+    return entry.data;
+}
+
+function setCache<T>(key: keyof typeof apiCache, data: T, ttl: number): void {
+    (apiCache as any)[key] = { data, timestamp: Date.now(), ttl };
+}
+
+// Combined Gym Data (OPTIMIZED: 2-3 API calls instead of 4, with smart caching)
+export interface GymDataCombined {
+    battleStats: TornBattleStats | null;
+    userData: TornUserData | null;
+    activeGym: number | null;
+    gymModifier: number;
+}
+
+export async function fetchGymDataCombined(): Promise<GymDataCombined> {
+    const result: GymDataCombined = {
+        battleStats: null,
+        userData: null,
+        activeGym: null,
+        gymModifier: 1
+    };
+
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return result;
+
+        // Check cache for gym modifier (rarely changes, 10 min TTL)
+        const cachedModifier = getCached(apiCache.gymModifier);
+
+        // Check cache for active gym (rarely changes, 5 min TTL)
+        const cachedGym = getCached(apiCache.activeGym);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+        // Use cached values if available
+        if (cachedModifier !== null) {
+            result.gymModifier = cachedModifier;
+        }
+        if (cachedGym !== null) {
+            result.activeGym = cachedGym;
+        }
+
+        // Build API calls array - only fetch what we need
+        const apiCalls: Promise<Response>[] = [];
+        const callTypes: string[] = [];
+
+        // Always fetch: V2 user data (for bars - proper format)
+        trackApiRequest();
+        apiCalls.push(fetch(
+            `${TORN_API_V2_BASE}/user?selections=bars&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        ));
+        callTypes.push('user');
+
+        // Always fetch: V2 battle stats
+        trackApiRequest();
+        apiCalls.push(fetch(
+            `${TORN_API_V2_BASE}/user/battlestats?key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        ));
+        callTypes.push('battlestats');
+
+        // Only fetch gym/perks if not cached
+        if (cachedModifier === null || cachedGym === null) {
+            trackApiRequest();
+            apiCalls.push(fetch(
+                `https://api.torn.com/user/?selections=gym,perks&key=${apiKey}`,
+                { signal: controller.signal, cache: 'no-store' }
+            ));
+            callTypes.push('gymperks');
+        }
+
+        const responses = await Promise.all(apiCalls);
+        clearTimeout(timeoutId);
+
+        const jsonPromises = responses.map(r => r.json());
+        const dataArray = await Promise.all(jsonPromises);
+
+        // Process responses
+        for (let i = 0; i < callTypes.length; i++) {
+            const data = dataArray[i];
+            const type = callTypes[i];
+
+            if (data.error) {
+                console.error(`Torn API error (${type}):`, data.error);
+                continue;
+            }
+
+            switch (type) {
+                case 'user':
+                    // V2 format - create minimal userData with bars
+                    result.userData = {
+                        profile: { id: 0, name: '', level: 0, rank: '', title: '', age: 0, property: null, life: data.bars?.life || { current: 0, maximum: 0 }, status: { description: '', details: null, state: 'Okay', color: 'green', until: null } },
+                        bars: data.bars || {
+                            energy: { current: 0, maximum: 0, increment: 0, interval: 0, tick_time: 0, full_time: 0 },
+                            nerve: { current: 0, maximum: 0, increment: 0, interval: 0, tick_time: 0, full_time: 0 },
+                            happy: { current: 0, maximum: 0, increment: 0, interval: 0, tick_time: 0, full_time: 0 },
+                            life: { current: 0, maximum: 0, increment: 0, interval: 0, tick_time: 0, full_time: 0 },
+                            chain: { id: 0, current: 0, max: 0, timeout: 0, modifier: 0, cooldown: 0, start: 0, end: 0 }
+                        },
+                        cooldowns: { drug: 0, medical: 0, booster: 0, jail: 0 },
+                        education: { complete: [], current: null },
+                        travel: null,
+                        money: { points: 0, wallet: 0, company: 0, vault: 0, cayman_bank: 0, city_bank: null, city_bank_time_left: null, faction: null, daily_networth: 0 },
+                        property: { property: { id: 0, name: 'None' }, status: 'owned', rental_period_remaining: 0 }
+                    };
+                    break;
+
+                case 'battlestats':
+                    const stats = data.battlestats || data;
+                    result.battleStats = {
+                        strength: stats.strength?.value || stats.strength || 0,
+                        defense: stats.defense?.value || stats.defense || 0,
+                        speed: stats.speed?.value || stats.speed || 0,
+                        dexterity: stats.dexterity?.value || stats.dexterity || 0,
+                        total: stats.total || 0
+                    };
+                    break;
+
+                case 'gymperks':
+                    // Active gym (cache for 5 min)
+                    if (data.active_gym !== undefined) {
+                        result.activeGym = data.active_gym;
+                        setCache('activeGym', data.active_gym, 5 * 60 * 1000);
+                    }
+
+                    // Gym modifier from perks (cache for 10 min)
+                    const allPerks: string[] = [
+                        ...(data.faction_perks || []),
+                        ...(data.job_perks || []),
+                        ...(data.property_perks || []),
+                        ...(data.education_perks || []),
+                        ...(data.enhancer_perks || []),
+                        ...(data.book_perks || []),
+                        ...(data.stock_perks || []),
+                        ...(data.merit_perks || []),
+                    ];
+                    let modifier = 1;
+                    for (const perk of allPerks) {
+                        const gymGains = parseGymGainsPerk(perk);
+                        if (gymGains > 0) {
+                            modifier *= (1 + gymGains);
+                        }
+                    }
+                    result.gymModifier = modifier;
+                    setCache('gymModifier', modifier, 10 * 60 * 1000);
+                    break;
+            }
+        }
+
+        return result;
+    } catch (error) {
+        console.error("Failed to fetch combined gym data:", error);
+        return result;
+    }
+}
+
+// Combined Faction + User Data (OPTIMIZED: 2 API calls instead of 3)
+export interface FactionDataCombined {
+    factionBasic: FactionBasicData | null;
+    rankedWars: RankedWarsResponse | null;
+    userData: TornUserData | null;
+}
+
+export async function fetchFactionDataCombined(): Promise<FactionDataCombined> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return { factionBasic: null, rankedWars: null, userData: null };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        // Make all 3 calls in parallel but with user data combined with chain info
+        trackApiRequest(); // Faction basic
+        trackApiRequest(); // Ranked wars
+        trackApiRequest(); // User data
+
+        const [factionResponse, warsResponse, userResponse] = await Promise.all([
+            fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
+            fetch(`${TORN_API_V2_BASE}/faction/rankedwars?offset=0&limit=20&sort=DESC&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
+            fetch(`${TORN_API_V2_BASE}/user?selections=profile,bars&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' })
+        ]);
+
+        clearTimeout(timeoutId);
+
+        const [factionData, warsData, userData] = await Promise.all([
+            factionResponse.json(),
+            warsResponse.json(),
+            userResponse.json()
+        ]);
+
+        return {
+            factionBasic: factionData.error ? null : factionData as FactionBasicData,
+            rankedWars: warsData.error ? null : warsData as RankedWarsResponse,
+            userData: userData.error ? null : userData as TornUserData
+        };
+    } catch (error) {
+        console.error("Failed to fetch combined faction data:", error);
+        return { factionBasic: null, rankedWars: null, userData: null };
     }
 }
 

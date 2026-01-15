@@ -15,8 +15,7 @@ import { syncUserTravelStatus } from "../../src/services/faction-service";
 import { syncNetworthAndGetProfit } from "../../src/services/profit-tracker";
 import {
     fetchEducationCourses,
-    fetchNetworth,
-    fetchUserData,
+    fetchUserDataWithNetworth,
     fetchWeeklyXanaxUsage,
     formatCurrency,
     formatNumber,
@@ -43,6 +42,7 @@ export default function Home() {
     const [isLoading, setIsLoading] = useState(true);
     const [showRentNotification, setShowRentNotification] = useState(true);
     const [dailyProfit, setDailyProfit] = useState(0);
+    const [profitPercent, setProfitPercent] = useState(0);
     const [cooldownEndTimes, setCooldownEndTimes] = useState({ drug: 0, booster: 0, medical: 0, jail: 0 });
     const [barEndTimes, setBarEndTimes] = useState({
         energy: 0,
@@ -230,8 +230,11 @@ export default function Home() {
 
     const loadData = async (showLoading = true) => {
         if (showLoading) setIsLoading(true);
-        const data = await fetchUserData();
+
+        // OPTIMIZED: Single API call for user data + networth (was 2 calls)
+        const { userData: data, networth: nw } = await fetchUserDataWithNetworth();
         setUserData(data);
+        setNetworth(nw);
 
         // Sync travel status to Supabase for faction mates to see
         if (data?.profile?.id && data?.travel) {
@@ -246,15 +249,13 @@ export default function Home() {
             ).catch(err => console.error('Failed to sync travel status:', err));
         }
 
-        const nw = await fetchNetworth();
-        setNetworth(nw);
-
         if (data?.profile?.id && nw?.personalstats?.networth?.total) {
-            const profitAngka = await syncNetworthAndGetProfit(
+            const profitData = await syncNetworthAndGetProfit(
                 data.profile.id,
                 nw.personalstats.networth.total
             );
-            setDailyProfit(profitAngka);
+            setDailyProfit(profitData.profit);
+            setProfitPercent(profitData.percentChange);
         }
 
         const weekly = await fetchWeeklyXanaxUsage();
@@ -280,7 +281,24 @@ export default function Home() {
     const bars = userData?.bars;
     const travel = userData?.travel;
     const education = userData?.education?.current;
-    const totalNetworth = networth?.personalstats?.networth?.total ?? 0;
+    // Hybrid Networth Calculation (Same as networth.tsx)
+    const networthData = networth?.personalstats?.networth;
+    const moneyData = userData?.money;
+
+    const realTimeLiquid: Record<string, number> = {
+        wallet: Number(moneyData?.wallet) || Number(networthData?.wallet) || 0,
+        vaults: Number(moneyData?.vault) || Number(networthData?.vaults) || 0,
+        bank: Number(moneyData?.city_bank) || Number(networthData?.bank) || 0,
+        overseas_bank: Number(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0,
+        points: Number(moneyData?.points) || Number(networthData?.points) || 0,
+    };
+
+    const cachedLiquidTotal = (networthData?.wallet ?? 0) + (networthData?.vaults ?? 0) +
+        (networthData?.bank ?? 0) + (networthData?.overseas_bank ?? 0) + (networthData?.points ?? 0);
+    const realTimeLiquidTotal = Object.values(realTimeLiquid).reduce((sum, val) => sum + val, 0);
+
+    // Adjusted Total: Cached Total - Cached Liquid + Real Time Liquid
+    const totalNetworth = (networthData?.total ?? 0) - cachedLiquidTotal + realTimeLiquidTotal;
     // Use real-time money from money selection (v2/user/money)
     const walletAmount = userData?.money?.wallet ?? 0;
 
@@ -443,8 +461,14 @@ export default function Home() {
                                 {/* Font Angka lebih tebal */}
                                 <Text className="text-white" style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(18) }}>{formatCurrency(dailyProfit)}</Text>
                             </View>
-                            <View className="flex-row" style={{ gap: hs(4) }}>
-                                <Text className="uppercase font-mono text-white/50" style={{ fontSize: ms(10) }}>calculated</Text>
+                            <View className="flex-row items-center" style={{ gap: hs(4) }}>
+                                <Text
+                                    className={`uppercase font-mono ${profitPercent >= 0 ? 'text-accent-green' : 'text-accent-red'}`}
+                                    style={{ fontSize: ms(10) }}
+                                >
+                                    {profitPercent >= 0 ? '+' : ''}{profitPercent.toFixed(2)}%
+                                </Text>
+                                <Text className="uppercase font-mono text-white/50" style={{ fontSize: ms(10) }}>VS YESTERDAY</Text>
                             </View>
                         </Card>
 

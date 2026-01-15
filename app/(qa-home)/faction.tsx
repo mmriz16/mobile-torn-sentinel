@@ -10,7 +10,7 @@ import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import { AVAILABLE_FACTION_SHORTCUTS, DEFAULT_FACTION_SHORTCUTS } from "../../src/constants/shortcuts";
 import { syncFactionData } from "../../src/services/faction-service";
-import { FactionBasicData, RankedWarsResponse, TornUserData, fetchFactionBasic, fetchRankedWars, fetchUserData, formatFactionStatus, formatTimeRemaining } from "../../src/services/torn-api";
+import { FactionBasicData, fetchFactionDataCombined, formatFactionStatus, formatTimeRemaining, RankedWarsResponse, TornUserData } from "../../src/services/torn-api";
 
 import { LinearGradient } from "expo-linear-gradient";
 import { Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
@@ -48,11 +48,9 @@ export default function Faction() {
 
     const loadFactionData = async () => {
         setIsLoading(true);
-        const [basic, wars, user] = await Promise.all([
-            fetchFactionBasic(),
-            fetchRankedWars(),
-            fetchUserData()
-        ]);
+        // OPTIMIZED: Combined parallel fetch
+        const { factionBasic: basic, rankedWars: wars, userData: user } = await fetchFactionDataCombined();
+
         if (basic) {
             setFactionData(basic);
             // Sync faction data to Supabase

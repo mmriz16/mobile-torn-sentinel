@@ -1,18 +1,50 @@
+# EAS Build Ignore File
+# Files/folders yang tidak perlu diunggah ke EAS Build
+
+# Version Control
+.git/
+.github/
+
+# IDE & Editor
 .vscode/
+.idea/
+*.iml
+
+# Expo cache
 .expo/
 .expo-shared/
+
+# Dependencies (EAS akan install sendiri)
 node_modules/
+
+# Build outputs
+dist/
+web-build/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Credentials (sudah di-handle terpisah via EAS secrets)
 credentials/
 *.p12
 *.jks
-.git/
-.github/
-dist/
-supabase/
-*.md
-debug.keystore
+*.keystore
 service-account.json
-app.json.backup
+
+# Backup files
+*.backup
+*.bak
+
+# Documentation
+*.md
+!README.md
+
+# Debug keystore (tidak perlu untuk production)
+debug.keystore
+
+# Local environment (secrets via EAS)
 .env
-*.tsbuildinfo
-/android
+.env.*
+
+# Supabase local config
+supabase/

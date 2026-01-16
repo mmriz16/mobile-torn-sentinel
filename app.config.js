@@ -15,13 +15,13 @@ export default {
         newArchEnabled: true,
 
         ios: {
-            jsEngine: "hermes",
+            jsEngine: "jsc",
             supportsTablet: true,
             bundleIdentifier: IS_DEV ? "com.kaozi.tornsentinel.dev" : "com.kaozi.tornsentinel"
         },
 
         android: {
-            jsEngine: "hermes",
+            jsEngine: "jsc",
             // Package name berbeda untuk dev vs production
             package: IS_DEV ? "com.kaozi.tornsentinel.dev" : "com.kaozi.tornsentinel",
             adaptiveIcon: {

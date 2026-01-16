@@ -10,14 +10,9 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native build artifacts
 .kotlin/
 *.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
 
 # Metro
 .metro-health-check*
@@ -29,26 +24,32 @@ yarn-error.*
 
 # macOS
 .DS_Store
-*.pem
-
-# local env files
-.env*.local
 
 # typescript
 *.tsbuildinfo
 
+# Example folder
 app-example
 
-# generated native folders
-/ios
-/android
-
-# EAS
-.keystore
+# EAS & Build
 credentials.json
-android/local.properties
+local.properties
 
 # Secrets - NEVER commit these
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
 service-account.json
 google-services.json
+GoogleService-Info.plist
 .env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+*.iml

@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "../global.css";
+import { UpdateModal } from "../src/components/modals/update-modal";
 import { GridPattern } from "../src/components/ui/grid-pattern";
 import { setupNotificationChannel } from "../src/utils/notifications";
 
@@ -121,6 +122,9 @@ export default function RootLayout() {
           </Stack>
         </View>
       </View>
+
+      {/* Update changelog modal - shows once per update */}
+      <UpdateModal />
     </GestureHandlerRootView>
   );
 }

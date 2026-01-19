@@ -256,7 +256,7 @@ export default function Bank() {
                                 <Text className="text-white camelCase font-sans" style={{ fontSize: ms(12) }}>Torn Sentinel</Text>
                             </View>
                         </View>
-                        <Text className="text-accent-yellow text-center" style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(34) }}>{formatCurrency(bankTotal)}</Text>
+                        <Text className="text-accent-yellow text-start" style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(34) }}>{formatCurrency(bankTotal)}</Text>
                         <View className="flex-row justify-between">
                             <View style={{ gap: vs(2) }}>
                                 <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Player ID</Text>

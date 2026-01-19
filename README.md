@@ -1,42 +1,74 @@
 # Torn Sentinel 🛡️
 
-**Torn Sentinel** is a mobile companion application for Torn City players, built with React Native (Expo) and Supabase. It provides real-time monitoring of user stats, faction tracking, and intelligent notifications.
+**Torn Sentinel** is a powerful mobile companion application for Torn City players, built with React Native (Expo) and Supabase. It offers real-time stat monitoring, intelligent notifications, and deep integration with Torn's banking and stock systems.
 
-## ✨ Features
+## ✨ Key Features
 
-- **Dashboard**: Real-time stats (Energy, Nerve, Happy, Life), Networth tracking, and Daily Profit calculator.
-- **Faction Tracking**: 
-  - View faction members list with detailed status (Okay, Traveling, Hospital, Jail).
-  - **Real-time Travel Tracking**: See accurate arrival times for faction members who use the app.
-  - Syncs data seamlessly via Supabase.
-- **Gym & Education**: Track active courses and gym train estimates.
-- **Quick Actions**: Customizable shortcuts for frequently used Torn features.
-- **Smart Notifications**: Push notifications for full energy, nerve, travel arrival, hospitalization, etc. (Powered by Supabase Edge Functions).
-- **Multiple Environments**: Dev, Preview, and Production builds.
+### 📊 Dashboard & Stats
+- **Real-time Status**: Monitor Energy, Nerve, Happy, and Life bars with precise countdowns.
+- **Cooldown Tracking**: Automatic timers for Drug, Booster, Medical, and Jail usage.
+- **Networth & Profit**: Track daily profit gains and total networth breakdown.
+
+### ✈️ Travel & Trading
+- **Travel Agent**: Real-time landing time countdowns and notifications.
+- **Foreign Stocks**: View available stock in other countries to plan trade runs.
+- **Item Market**: Browse items by category (Weapons, Armor, Medical, etc.) with search functionality.
+
+### 🏦 Banking & Finance
+- **Torn Bank**: View bank balance, active investments, and calculate investment returns.
+- **City Bank Investment**: Visual progress bar for investment maturity with profit calculations.
+- **Investment Calculator**: Smart inputs for "Current Wallet" or "2B Cap" investment strategies to maximize returns.
+- **Offshore & Stocks**: *[Under Construction]* Modules for additional financial management.
+
+### 🏋️ Gym & Training
+- **Jump Calculators**: Built-in presets for **"Happy Jump"** and **"Choco Jump"**.
+- **Energy Optimization**: Calculate exact item requirements (Xanax, E-DVDs) based on current energy and limits.
+
+### 👥 Faction
+- **Member Status**: See who is active, traveling, in hospital, or in jail at a glance.
+- **Chain Watcher**: Real-time chain timeout monitoring and alerts to prevent breaks.
+- **Ranked Wars**: View active war status and targets.
+
+### 🔔 Smart Notifications
+- **Local Alerts**: 
+  - Energy/Nerve/Life Full
+  - Travel Arrival (2 mins before & on landing)
+  - Happy Reset (every 15 mins, smart-checked)
+  - Chain Timeout Warnings
+  - Cooldown Expiry (Drugs, Boosters, Hospital, Jail)
+- **Push System**: Robust scheduling handles app backgrounding and restarts, ensuring you never miss a beat.
+
+### 🛠️ App Features
+- **Changelog**: Built-in "What's New" modal to track version history and updates.
+- **Secure Handling**: API Keys stored securely on the device using Expo SecureStore.
+- **Optimized UI**: Dark mode, blurred modals (`expo-blur`), and responsive design.
 
 ## 🛠️ Tech Stack
 
 - **Framework**: React Native (Expo SDK 52)
 - **Language**: TypeScript
 - **Styling**: NativeWind (Tailwind CSS)
+- **UI Components**: Lucide Icons, Expo Blur
 - **Navigation**: Expo Router (File-based routing)
 - **Backend/DB**: Supabase (PostgreSQL, Edge Functions, Auth)
-- **API**: Torn API
+- **API**: Torn API v2
 
 ## 📂 Project Structure
 
 ```
 ├── app/                  # Expo Router pages/screens
-│   ├── (tabs)/           # Main tab navigation
-│   ├── (qa-home)/        # Quick actions for Home
-│   └── (qa-factions)/    # Faction related screens
+│   ├── (tabs)/           # Main tab navigation (Home, Market, Stats, Assets, Settings)
+│   ├── (qa-home)/        # Quick actions (Gym, Travel, Bank, etc.)
+│   ├── (qa-factions)/    # Faction modules (Members, Chain, War)
+│   ├── (modals)/         # Global modals (Changelog, API Key)
+│   └── _layout.tsx       # Root layout & providers
 ├── src/
 │   ├── components/       # Reusable UI components
 │   ├── constants/        # App constants & config
 │   ├── services/         # API integrations (Torn, Supabase)
 │   ├── styles/           # Global styles & themes
 │   ├── types/            # TypeScript definitions
-│   └── utils/            # Helper functions
+│   └── utils/            # Helper functions (notifications, formatters)
 ├── supabase/             # Supabase migrations & Edge Functions
 └── assets/               # Images and fonts
 ```
@@ -46,8 +78,8 @@
 ### Prerequisites
 
 1. **Node.js**: LTS version recommended.
-2. **Torn API Key**: You need a valid API Key from [Torn Preferences](https://www.torn.com/preferences.php).
-3. **Supabase Project**: Set up a Supabase project for backend syncing.
+2. **Torn API Key**: A valid API Key from [Torn Preferences](https://www.torn.com/preferences.php).
+3. **Supabase Project**: Set up a Supabase project for specific sync features.
 
 ### Installation
 
@@ -63,11 +95,7 @@
    ```
 
 3. Configure Environment Variables:
-   Create a `.env` file in the root based on your Supabase credentials:
-   ```env
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
+   Create a `.env` file in the root based on your Supabase credentials.
 
 4. Run the app:
    ```bash
@@ -76,22 +104,28 @@
 
 ## 📱 Build & Deployment
 
-This project uses EAS (Expo Application Services) for building.
+This project uses **EAS (Expo Application Services)** for CI/CD.
 
-**Development Build (Torn Sentinel Dev):**
+**Development Build:**
 ```bash
 eas build --profile development --platform android
 ```
 
-**Production Build (Torn Sentinel):**
+**Production Release:**
 ```bash
 eas build --profile production --platform android
 ```
 
+**OTA Update (Hotfix):**
+```bash
+# Uses the custom workflow for auto-incrementing version
+eas-update
+```
+
 ## 📄 Documentation
 
-- **Supabase Edge Functions**: See `supabase/functions/README.md` (if available) or check `command.md` for deployment cheatsheet.
-- **Commands**: Check `command.md` for useful CLI commands used in this project.
+- **Workflows**: Check `.agent/workflows/` for automated tasks.
+- **Commands**: Check `command.md` for CLI cheatsheet.
 
 ## ⚠️ Disclaimer
 

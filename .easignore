@@ -48,3 +48,5 @@ debug.keystore
 
 # Supabase local config
 supabase/
+
+/android

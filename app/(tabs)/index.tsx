@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Dimensions, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ManageShortcutsModal } from "../../src/components/modals/manage-shortcuts-modal";
 import { Card } from "../../src/components/ui/card";
@@ -11,6 +11,8 @@ import TravelLoader from "../../src/components/ui/travel-loader";
 import { AVAILABLE_HOME_SHORTCUTS, AVAILABLE_SHORTCUTS, DEFAULT_SHORTCUTS } from "../../src/constants/shortcuts";
 import { supabase } from "../../src/services/supabase";
 
+import Constants from "expo-constants";
+import * as Notifications from "expo-notifications";
 import { syncUserTravelStatus } from "../../src/services/faction-service";
 import { syncNetworthAndGetProfit } from "../../src/services/profit-tracker";
 import {
@@ -24,6 +26,7 @@ import {
     TornNetworth,
     TornUserData
 } from "../../src/services/torn-api";
+import { scheduleAllNotifications } from "../../src/utils/notifications";
 
 // 1. IMPORT Helper Responsif (Pake Alias biar pendek)
 import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from '../../src/utils/responsive';
@@ -32,6 +35,8 @@ import EducationIcon from '../../assets/icons/education.svg';
 import QaOthers from '../../assets/icons/qa-others.svg';
 
 import { BatteryCharging, Bell, Brain, Cannabis, Coins, Columns4, Cross, Heart, Link, Smile, TrendingUp, TriangleAlert, X, Zap } from 'lucide-react-native';
+
+import Changelog from '../(modals)/changelog';
 
 // --- Animated Components Removed ---
 
@@ -67,6 +72,28 @@ export default function Home() {
     const [activeShortcuts, setActiveShortcuts] = useState<string[]>(DEFAULT_SHORTCUTS);
     const [isShortcutModalVisible, setIsShortcutModalVisible] = useState(false);
     const [testNotifCooldown, setTestNotifCooldown] = useState(0);
+    const [showChangelog, setShowChangelog] = useState(false);
+
+    // Current app version - update this when releasing new versions
+    const APP_VERSION = "1.0.1";
+
+    // Check if changelog should be shown (once per version)
+    useEffect(() => {
+        const checkChangelogVersion = async () => {
+            if (Platform.OS === 'web') return; // Skip on web
+            try {
+                const lastSeenVersion = await SecureStore.getItemAsync('last_seen_changelog_version');
+                if (lastSeenVersion !== APP_VERSION) {
+                    setShowChangelog(true);
+                    // Save the current version so it won't show again
+                    await SecureStore.setItemAsync('last_seen_changelog_version', APP_VERSION);
+                }
+            } catch (e) {
+                console.warn('Failed to check changelog version:', e);
+            }
+        };
+        checkChangelogVersion();
+    }, []);
 
     useEffect(() => {
         loadShortcuts();
@@ -162,11 +189,46 @@ export default function Home() {
         const refreshInterval = setInterval(() => {
             loadData(false);
         }, 10000);
+
         return () => clearInterval(refreshInterval);
     }, []);
 
+    // Watch userData for local notifications & token sync
     useEffect(() => {
         if (!userData) return;
+
+        // 1. Schedule Local Notifications (Energy full, landing, etc.)
+        scheduleAllNotifications(userData);
+
+        // 2. Sync Push Token (since we now have userData.profile.id)
+        if (Platform.OS !== 'web') {
+            (async () => {
+                const { status } = await Notifications.getPermissionsAsync();
+                if (status === 'granted') {
+                    try {
+                        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+                        const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+                        const pushToken = tokenData.data;
+                        const apiKey = await SecureStore.getItemAsync("tornApiKey");
+
+                        if (pushToken && apiKey && userData.profile.id) {
+                            // Call register_secure_user (safe rpc)
+                            const { error } = await supabase.rpc('register_secure_user', {
+                                p_id: userData.profile.id,
+                                p_username: userData.profile.name,
+                                p_faction_id: userData.money.faction || 0, // money.faction might be null, check checks
+                                p_push_token: pushToken,
+                                p_api_key: apiKey
+                            });
+                            if (error) console.warn("Supabase token sync error:", error);
+                        }
+                    } catch (err) {
+                        console.warn("Token sync failed:", err);
+                    }
+                }
+            })();
+        }
+
         const now = Date.now();
 
         // Jail time from profile status (when in Jail)
@@ -231,12 +293,19 @@ export default function Home() {
     const loadData = async (showLoading = true) => {
         if (showLoading) setIsLoading(true);
 
-        // OPTIMIZED: Single API call for user data + networth (was 2 calls)
+        // 1. CRITICAL DATA: Get User Data & Networth asap
         const { userData: data, networth: nw } = await fetchUserDataWithNetworth();
+
+        // Update Critical State
         setUserData(data);
         setNetworth(nw);
+        setApiRequestCount(getApiRequestCount());
 
-        // Sync travel status to Supabase for faction mates to see
+        // 2. UNBLOCK UI: Stop loading immediately so user sees the app
+        if (showLoading) setIsLoading(false);
+
+        // 3. BACKGROUND TASKS: Fetch secondary data silently
+        // Sync travel status
         if (data?.profile?.id && data?.travel) {
             const travelState = data.travel.time_left > 0 ? 'Traveling' : (data.travel.destination !== 'Torn' ? 'Abroad' : 'Okay');
             syncUserTravelStatus(
@@ -249,23 +318,65 @@ export default function Home() {
             ).catch(err => console.error('Failed to sync travel status:', err));
         }
 
+        // Daily Profit & Networth
         if (data?.profile?.id && nw?.personalstats?.networth?.total) {
-            const profitData = await syncNetworthAndGetProfit(
+            syncNetworthAndGetProfit(
                 data.profile.id,
                 nw.personalstats.networth.total
-            );
-            setDailyProfit(profitData.profit);
-            setProfitPercent(profitData.percentChange);
+            ).then(profitData => {
+                setDailyProfit(profitData.profit);
+                setProfitPercent(profitData.percentChange);
+            }).catch(e => console.warn("Profit sync error:", e));
         }
 
-        const weekly = await fetchWeeklyXanaxUsage();
-        setWeeklyXanax(weekly);
-        const courses = await fetchEducationCourses();
-        if (courses) {
-            setCourseNames(courses);
+        // Weekly Xanax
+        fetchWeeklyXanaxUsage().then(weekly => {
+            setWeeklyXanax(weekly);
+        }).catch(e => console.warn("Xanax fetch error:", e));
+
+        // Education Courses
+        fetchEducationCourses().then(courses => {
+            if (courses) setCourseNames(courses);
+        }).catch(e => console.warn("Course fetch error:", e));
+
+        // Save daily bank snapshot for "VS Yesterday" comparison (runs in background)
+        saveBankDailySnapshot(data, nw);
+    };
+
+    // Helper: Save daily bank snapshot for "VS Yesterday" comparison
+    const saveBankDailySnapshot = async (user: TornUserData | null, nw: TornNetworth | null) => {
+        if (Platform.OS === 'web') return;
+        if (!user) return;
+
+        // Get today's date string (YYYY-MM-DD in user's timezone)
+        const now = new Date();
+        const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        // Calculate current values
+        const moneyData = user.money;
+        const networthData = nw?.personalstats?.networth;
+        const currentWallet = Number(moneyData?.wallet) || Number(networthData?.wallet) || 0;
+        const currentStocks = Number(networthData?.stock_market) || 0;
+
+        try {
+            const storedData = await SecureStore.getItemAsync('bank_daily_snapshots');
+            let snapshots: { date: string; wallet: number; stocks: number }[] = storedData ? JSON.parse(storedData) : [];
+
+            // Check if today's snapshot already exists
+            const todayExists = snapshots.some(s => s.date === todayDate);
+            if (!todayExists) {
+                // First check of the day - save snapshot
+                snapshots.push({ date: todayDate, wallet: currentWallet, stocks: currentStocks });
+
+                // Keep only last 7 days
+                snapshots = snapshots.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
+
+                await SecureStore.setItemAsync('bank_daily_snapshots', JSON.stringify(snapshots));
+                console.log('📊 Bank daily snapshot saved:', todayDate);
+            }
+        } catch (e) {
+            console.warn('Failed to save bank snapshot:', e);
         }
-        setApiRequestCount(getApiRequestCount());
-        if (showLoading) setIsLoading(false);
     };
 
     if (isLoading) {
@@ -673,6 +784,24 @@ export default function Home() {
                     </Card>
                 </View>
             </ScrollView>
+
+            {/* Changelog Modal - Half Screen Bottom Sheet */}
+            <Modal
+                visible={showChangelog}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowChangelog(false)}
+            >
+                <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+                    <Pressable
+                        style={{ flex: 1 }}
+                        onPress={() => setShowChangelog(false)}
+                    />
+                    <View style={{ height: Dimensions.get('window').height / 1.28 }}>
+                        <Changelog onClose={() => setShowChangelog(false)} />
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView >
     );
 }

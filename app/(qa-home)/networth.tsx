@@ -1,6 +1,6 @@
 import { ChartNoAxesCombined, HelpCircle, LucideIcon, Package, Receipt, Wallet } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Logo from "../../assets/logo.svg";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
@@ -179,8 +179,21 @@ export default function Networth() {
                 {/* Total Networth Header */}
                 <View
                     className="bg-tactical-900 border border-tactical-800 rounded-lg"
-                    style={{ padding: ms(16), gap: ms(24) }}
+                    style={{ padding: ms(16), gap: ms(24), overflow: 'hidden' }}
                 >
+                    <Image
+                        source={require('../../assets/images/card.png')}
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            width: '100%',
+                            height: '100%',
+                        }}
+                        resizeMode="cover"
+                    />
                     <View className="flex-row items-center justify-between">
                         <View style={{ gap: ms(4) }}>
                             <Text

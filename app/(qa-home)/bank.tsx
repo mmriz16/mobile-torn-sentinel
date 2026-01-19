@@ -1,7 +1,8 @@
 import { Card } from "@/src/components/ui/card";
 import { router } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Logo from "../../assets/logo.svg";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
@@ -9,6 +10,26 @@ import { TitleBar } from "../../src/components/ui/title-bar";
 import { supabase } from "../../src/services/supabase";
 import { fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBankDetails, TornNetworth, TornUserData } from "../../src/services/torn-api";
 import { moderateScale as ms, verticalScale as vs } from "../../src/utils/responsive";
+
+// Helper: Get today's date string at midnight in user's timezone (YYYY-MM-DD)
+const getTodayDateString = (): string => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+// Helper: Get yesterday's date string
+const getYesterdayDateString = (): string => {
+    const now = new Date();
+    now.setDate(now.getDate() - 1);
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+// Interface for daily snapshot
+interface DailySnapshot {
+    date: string;
+    wallet: number;
+    stocks: number;
+}
 
 // Bank transaction log from database
 interface BankLog {
@@ -32,6 +53,10 @@ export default function Bank() {
     const [bankLogs, setBankLogs] = useState<BankLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const isInitialLoad = useRef(true);
+
+    // Daily comparison state
+    const [yesterdayWallet, setYesterdayWallet] = useState<number | null>(null);
+    const [yesterdayStocks, setYesterdayStocks] = useState<number | null>(null);
 
     const loadData = async () => {
         if (isInitialLoad.current) {
@@ -64,6 +89,53 @@ export default function Bank() {
 
         setIsLoading(false);
         isInitialLoad.current = false;
+
+        // Handle daily snapshots for comparison
+        await handleDailySnapshots(userDataResult, networthData);
+    };
+
+    // Daily snapshot logic
+    const handleDailySnapshots = async (user: TornUserData | null, nw: TornNetworth | null) => {
+        if (Platform.OS === 'web') return; // Skip on web
+        if (!user) return;
+
+        const todayDate = getTodayDateString();
+        const yesterdayDate = getYesterdayDateString();
+
+        // Calculate current values
+        const moneyData = user.money;
+        const networthData = nw?.personalstats?.networth;
+        const currentWallet = Number(moneyData?.wallet) || Number(networthData?.wallet) || 0;
+        const currentStocks = Number(networthData?.stock_market) || 0;
+
+        try {
+            // Get stored snapshots
+            const storedData = await SecureStore.getItemAsync('bank_daily_snapshots');
+            let snapshots: DailySnapshot[] = storedData ? JSON.parse(storedData) : [];
+
+            // Find yesterday's snapshot
+            const yesterdaySnapshot = snapshots.find(s => s.date === yesterdayDate);
+            if (yesterdaySnapshot) {
+                setYesterdayWallet(yesterdaySnapshot.wallet);
+                setYesterdayStocks(yesterdaySnapshot.stocks);
+            }
+
+            // Check if today's snapshot already exists
+            const todaySnapshotIndex = snapshots.findIndex(s => s.date === todayDate);
+            if (todaySnapshotIndex === -1) {
+                // First check of the day - save snapshot
+                snapshots.push({ date: todayDate, wallet: currentWallet, stocks: currentStocks });
+            }
+
+            // Keep only last 7 days of snapshots
+            snapshots = snapshots
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .slice(0, 7);
+
+            await SecureStore.setItemAsync('bank_daily_snapshots', JSON.stringify(snapshots));
+        } catch (e) {
+            console.warn('Failed to handle daily snapshots:', e);
+        }
     };
 
     useEffect(() => {
@@ -160,7 +232,20 @@ export default function Bank() {
                 <View style={{ gap: vs(10) }}>
 
                     {/* Bank Card */}
-                    <Card style={{ padding: ms(16), gap: vs(24) }}>
+                    <Card style={{ padding: ms(16), gap: vs(24), overflow: 'hidden' }}>
+                        <Image
+                            source={require('../../assets/images/card.png')}
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                width: '100%',
+                                height: '100%',
+                            }}
+                            resizeMode="cover"
+                        />
                         <View className="flex-row justify-between">
                             <View style={{ gap: vs(2) }}>
                                 <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Name</Text>
@@ -190,16 +275,38 @@ export default function Bank() {
                             <Text className="text-accent-yellow uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(12) }}>Wallet</Text>
                             <Text className={wallet > 0 ? "text-white" : "text-white/50"} style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(24) }}>{wallet > 0 ? formatCurrencyShort(wallet) : "-"}</Text>
                             <View className="flex-row" style={{ gap: vs(4) }}>
-                                <Text className="text-white/50" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>-</Text>
-                                <Text className="text-white/50 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>VS Last Check</Text>
+                                {yesterdayWallet !== null && wallet > 0 ? (
+                                    <>
+                                        <Text className={wallet - yesterdayWallet >= 0 ? "text-accent-green" : "text-accent-red"} style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>
+                                            {wallet - yesterdayWallet >= 0 ? '+' : ''}{formatCurrencyShort(wallet - yesterdayWallet)}
+                                        </Text>
+                                        <Text className="text-white/50 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>VS Yesterday</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Text className="text-white/50" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>-</Text>
+                                        <Text className="text-white/50 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>VS Yesterday</Text>
+                                    </>
+                                )}
                             </View>
                         </Card>
                         <Card className="flex-1" style={{ padding: ms(16), gap: vs(2) }}>
                             <Text className="text-accent-yellow uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(12) }}>Company Stocks</Text>
                             <Text className={stockMarket > 0 ? "text-white" : "text-white/50"} style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(24) }}>{stockMarket > 0 ? formatCurrencyShort(stockMarket) : "-"}</Text>
                             <View className="flex-row" style={{ gap: vs(4) }}>
-                                <Text className="text-white/50" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>-</Text>
-                                <Text className="text-white/50 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>VS Last Check</Text>
+                                {yesterdayStocks !== null && stockMarket > 0 ? (
+                                    <>
+                                        <Text className={stockMarket - yesterdayStocks >= 0 ? "text-accent-green" : "text-accent-red"} style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>
+                                            {stockMarket - yesterdayStocks >= 0 ? '+' : ''}{formatCurrencyShort(stockMarket - yesterdayStocks)}
+                                        </Text>
+                                        <Text className="text-white/50 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>VS Yesterday</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Text className="text-white/50" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>-</Text>
+                                        <Text className="text-white/50 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>VS Yesterday</Text>
+                                    </>
+                                )}
                             </View>
                         </Card>
                     </View>

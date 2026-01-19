@@ -4,6 +4,7 @@ import { View } from "react-native";
 type Props = {
     value: number; // 0..1
     height?: number;
+    className?: string;
     trackClassName?: string;
     fillClassName?: string;
 };
@@ -13,6 +14,7 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 
 export function ProgressBar({
     value,
     height = 5,
+    className,
     trackClassName = "tactical-950",
     fillClassName = "accent-blue",
 }: Props) {
@@ -20,7 +22,7 @@ export function ProgressBar({
 
     return (
         <View
-            className={trackClassName}
+            className={`${trackClassName} ${className ?? ""}`}
             style={{ height, overflow: "hidden" }}
         >
             <View

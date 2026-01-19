@@ -133,15 +133,19 @@ export async function scheduleAllNotifications(data: TornData) {
         }
     }
 
-    // 😄 Happy (Manual Logic)
-    // Happy reset setiap :00, :15, :30, :45. Kita hitung detik menuju kelipatan 15 menit terdekat.
-    const date = new Date();
-    const minutes = date.getMinutes();
-    const seconds = date.getSeconds();
-    let nextTickSeconds = ((15 - (minutes % 15)) * 60) - seconds;
-    if (nextTickSeconds <= 0) nextTickSeconds += 900; // Koreksi jika negatif
+    // 😄 Happy - Only schedule if happy is NOT full
+    const happyCurrent = data.bars?.happy?.current ?? 0;
+    const happyMax = data.bars?.happy?.maximum ?? 0;
+    if (happyCurrent < happyMax && happyMax > 0) {
+        // Happy reset setiap :00, :15, :30, :45. Kita hitung detik menuju kelipatan 15 menit terdekat.
+        const date = new Date();
+        const minutes = date.getMinutes();
+        const seconds = date.getSeconds();
+        let nextTickSeconds = ((15 - (minutes % 15)) * 60) - seconds;
+        if (nextTickSeconds <= 0) nextTickSeconds += 900; // Koreksi jika negatif
 
-    await scheduleItem("😄 Happy Reset", "Happy is topped up—if you've been waiting to train, this is your moment to make it count.", nextTickSeconds);
+        await scheduleItem("😄 Happy Reset", "Happy is topped up—if you've been waiting to train, this is your moment to make it count.", nextTickSeconds);
+    }
 
     // --- C. COOLDOWNS ---
 

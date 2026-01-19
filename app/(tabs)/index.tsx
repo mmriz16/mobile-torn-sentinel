@@ -193,14 +193,11 @@ export default function Home() {
         return () => clearInterval(refreshInterval);
     }, []);
 
-    // Watch userData for local notifications & token sync
+    // Watch userData for token sync only (notifications scheduled in separate useEffect below)
     useEffect(() => {
         if (!userData) return;
 
-        // 1. Schedule Local Notifications (Energy full, landing, etc.)
-        scheduleAllNotifications(userData);
-
-        // 2. Sync Push Token (since we now have userData.profile.id)
+        // Sync Push Token (since we now have userData.profile.id)
         if (Platform.OS !== 'web') {
             (async () => {
                 const { status } = await Notifications.getPermissionsAsync();
@@ -258,7 +255,11 @@ export default function Home() {
             life: now + ((userData.bars?.life?.full_time ?? 0) * 1000),
             chain: now + ((userData.bars?.chain?.timeout ?? 0) * 1000),
         });
-    }, [userData]);
+
+        // 3. Schedule Local Notifications - only once per userData load, not on every refresh
+        // Using a flag to prevent duplicate scheduling
+        scheduleAllNotifications(userData);
+    }, [userData?.profile?.id]); // Only re-run when user ID changes (login/logout), not on every data refresh
 
     useEffect(() => {
         const updateTimers = () => {

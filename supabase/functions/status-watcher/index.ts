@@ -329,13 +329,20 @@ serve(async (_req) => {
         }
 
         // 3) HAPPY
-        if ((d.happy?.current ?? 0) >= (d.happy?.maximum ?? 0) && !userStatus.happy_full) {
+        const happyCurrent = d.happy?.current ?? 0;
+        const happyMax = d.happy?.maximum ?? 0;
+        const hasDrugCooldown = (d.cooldowns?.drug ?? 0) > 0;
+        const isHospitalized = d.status?.state === "Hospital";
+        const isJailed = d.status?.state === "Jail";
+
+        // Only notify if happy is full AND not on cooldown/incapacitated
+        if (happyCurrent >= happyMax && !hasDrugCooldown && !isHospitalized && !isJailed && !userStatus.happy_full) {
           await push(
             "😊 Happy Full",
             "Happy is topped up—if you've been waiting to train, this is your moment to make it count.",
             "happy_full"
           );
-        } else if ((d.happy?.current ?? 0) < (d.happy?.maximum ?? 0)) {
+        } else if (happyCurrent < happyMax) {
           await reset("happy_full");
         }
 

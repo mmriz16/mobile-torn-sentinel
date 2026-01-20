@@ -192,7 +192,7 @@ export default function Networth() {
                             width: '100%',
                             height: '100%',
                         }}
-                        resizeMode="cover"
+                        resizeMode="stretch"
                     />
                     <View className="flex-row items-center justify-between">
                         <View style={{ gap: ms(4) }}>

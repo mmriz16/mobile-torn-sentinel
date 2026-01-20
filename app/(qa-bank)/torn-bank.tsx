@@ -193,7 +193,7 @@ export default function TornBank() {
                             width: '100%',
                             height: '100%',
                         }}
-                        resizeMode="cover"
+                        resizeMode="stretch"
                     />
                     <View className="flex-row justify-between">
                         <View style={{ gap: vs(2) }}>

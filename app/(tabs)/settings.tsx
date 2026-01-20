@@ -1,10 +1,10 @@
 import Constants from "expo-constants";
-import * as Updates from "expo-updates";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import { Trash2, X } from "lucide-react-native";
+import * as Updates from "expo-updates";
+import { RefreshCw, Trash2, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { Modal, Platform, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Platform, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "../../src/components/ui/card";
 import { GridPattern } from "../../src/components/ui/grid-pattern";
@@ -12,6 +12,43 @@ import { moderateScale as ms, verticalScale as vs } from "../../src/utils/respon
 
 export default function Settings() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
+  const checkForUpdates = async () => {
+    try {
+      if (__DEV__) {
+        Alert.alert('Development Mode', 'Cannot check for OTA updates in development mode.');
+        return;
+      }
+
+      setIsCheckingUpdate(true);
+      const update = await Updates.checkForUpdateAsync();
+
+      if (update.isAvailable) {
+        Alert.alert(
+          'Update Available',
+          'A new version is available. Would you like to restart and update now?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Restart',
+              onPress: async () => {
+                await Updates.fetchUpdateAsync();
+                await Updates.reloadAsync();
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Up to Date', 'You are using the latest version.');
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to check for updates.');
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -112,6 +149,22 @@ export default function Settings() {
             Torn Sentinel v{appVersion} • Build {buildVersion} •{" "}
             <Text className="text-accent-green">Stable</Text>
           </Text>
+
+          {/* Check Update Button */}
+          <TouchableOpacity
+            onPress={checkForUpdates}
+            disabled={isCheckingUpdate}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: ms(6), padding: ms(8) }}
+          >
+            {isCheckingUpdate ? (
+              <ActivityIndicator size="small" color="#F59E0B" />
+            ) : (
+              <RefreshCw size={ms(12)} color="#F59E0B" />
+            )}
+            <Text className="text-accent-yellow" style={{ fontSize: ms(12), fontFamily: "Inter_600SemiBold" }}>
+              {isCheckingUpdate ? "Checking..." : "Check for Updates"}
+            </Text>
+          </TouchableOpacity>
 
           <Text
             className="text-white/20 text-center"

@@ -75,7 +75,7 @@ export default function Home() {
     const [showChangelog, setShowChangelog] = useState(false);
 
     // Current app version - update this when releasing new versions
-    const APP_VERSION = "1.0.3";
+    const APP_VERSION = "1.0.5";
 
     // Check if changelog should be shown (once per version)
     useEffect(() => {
@@ -129,12 +129,101 @@ export default function Home() {
         }
     };
 
+    // Helper: Save daily bank snapshot for "VS Yesterday" comparison
+    const saveBankDailySnapshot = useCallback(async (user: TornUserData | null, nw: TornNetworth | null) => {
+        if (Platform.OS === 'web') return;
+        if (!user) return;
+
+        // Get today's date string (YYYY-MM-DD in user's timezone)
+        const now = new Date();
+        const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        // Calculate current values
+        const moneyData = user.money;
+        const networthData = nw?.personalstats?.networth;
+        const currentWallet = Number(moneyData?.wallet) || Number(networthData?.wallet) || 0;
+        const currentStocks = Number(networthData?.stock_market) || 0;
+
+        try {
+            const storedData = await SecureStore.getItemAsync('bank_daily_snapshots');
+            let snapshots: { date: string; wallet: number; stocks: number }[] = storedData ? JSON.parse(storedData) : [];
+
+            // Check if today's snapshot already exists
+            const todayExists = snapshots.some(s => s.date === todayDate);
+            if (!todayExists) {
+                // First check of the day - save snapshot
+                snapshots.push({ date: todayDate, wallet: currentWallet, stocks: currentStocks });
+
+                // Keep only last 7 days
+                snapshots = snapshots.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
+
+                await SecureStore.setItemAsync('bank_daily_snapshots', JSON.stringify(snapshots));
+                console.log('📊 Bank daily snapshot saved:', todayDate);
+            }
+        } catch (e) {
+            console.warn('Failed to save bank snapshot:', e);
+        }
+    }, []);
+
+    const loadData = useCallback(async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
+
+        // 1. CRITICAL DATA: Get User Data & Networth asap
+        const { userData: data, networth: nw } = await fetchUserDataWithNetworth();
+
+        // Update Critical State
+        setUserData(data);
+        setNetworth(nw);
+        setApiRequestCount(getApiRequestCount());
+
+        // 2. UNBLOCK UI: Stop loading immediately so user sees the app
+        if (showLoading) setIsLoading(false);
+
+        // 3. BACKGROUND TASKS: Fetch secondary data silently
+        // Sync travel status
+        if (data?.profile?.id && data?.travel) {
+            const travelState = data.travel.time_left > 0 ? 'Traveling' : (data.travel.destination !== 'Torn' ? 'Abroad' : 'Okay');
+            syncUserTravelStatus(
+                data.profile.id,
+                travelState,
+                data.travel.destination || null,
+                data.travel.arrival_at || null,
+                data.profile.status?.state || null,
+                data.profile.status?.until || null
+            ).catch(err => console.error('Failed to sync travel status:', err));
+        }
+
+        // Daily Profit & Networth
+        if (data?.profile?.id && nw?.personalstats?.networth?.total) {
+            syncNetworthAndGetProfit(
+                data.profile.id,
+                nw.personalstats.networth.total
+            ).then(profitData => {
+                setDailyProfit(profitData.profit);
+                setProfitPercent(profitData.percentChange);
+            }).catch(e => console.warn("Profit sync error:", e));
+        }
+
+        // Weekly Xanax
+        fetchWeeklyXanaxUsage().then(weekly => {
+            setWeeklyXanax(weekly);
+        }).catch(e => console.warn("Xanax fetch error:", e));
+
+        // Education Courses
+        fetchEducationCourses().then(courses => {
+            if (courses) setCourseNames(courses);
+        }).catch(e => console.warn("Course fetch error:", e));
+
+        // Save daily bank snapshot for "VS Yesterday" comparison (runs in background)
+        saveBankDailySnapshot(data, nw);
+    }, [saveBankDailySnapshot]);
+
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await loadData(false);
         setRefreshing(false);
         setShowRentNotification(true);
-    }, []);
+    }, [loadData]);
 
     // Handle test notification button press
     const handleTestNotification = async () => {
@@ -191,7 +280,7 @@ export default function Home() {
         }, 10000);
 
         return () => clearInterval(refreshInterval);
-    }, []);
+    }, [loadData]);
 
     // Watch userData for token sync only (notifications scheduled in separate useEffect below)
     useEffect(() => {
@@ -256,10 +345,10 @@ export default function Home() {
             chain: now + ((userData.bars?.chain?.timeout ?? 0) * 1000),
         });
 
-        // 3. Schedule Local Notifications - only once per userData load, not on every refresh
-        // Using a flag to prevent duplicate scheduling
+        // 3. Schedule Local Notifications
+        // Re-schedule whenever relevant status changes (cooldowns, bars, etc.)
         scheduleAllNotifications(userData);
-    }, [userData?.profile?.id]); // Only re-run when user ID changes (login/logout), not on every data refresh
+    }, [userData]); // Re-run when userData changes (includes cooldowns, status, etc.)
 
     useEffect(() => {
         const updateTimers = () => {
@@ -291,94 +380,7 @@ export default function Home() {
 
 
 
-    const loadData = async (showLoading = true) => {
-        if (showLoading) setIsLoading(true);
 
-        // 1. CRITICAL DATA: Get User Data & Networth asap
-        const { userData: data, networth: nw } = await fetchUserDataWithNetworth();
-
-        // Update Critical State
-        setUserData(data);
-        setNetworth(nw);
-        setApiRequestCount(getApiRequestCount());
-
-        // 2. UNBLOCK UI: Stop loading immediately so user sees the app
-        if (showLoading) setIsLoading(false);
-
-        // 3. BACKGROUND TASKS: Fetch secondary data silently
-        // Sync travel status
-        if (data?.profile?.id && data?.travel) {
-            const travelState = data.travel.time_left > 0 ? 'Traveling' : (data.travel.destination !== 'Torn' ? 'Abroad' : 'Okay');
-            syncUserTravelStatus(
-                data.profile.id,
-                travelState,
-                data.travel.destination || null,
-                data.travel.arrival_at || null,
-                data.profile.status?.state || null,
-                data.profile.status?.until || null
-            ).catch(err => console.error('Failed to sync travel status:', err));
-        }
-
-        // Daily Profit & Networth
-        if (data?.profile?.id && nw?.personalstats?.networth?.total) {
-            syncNetworthAndGetProfit(
-                data.profile.id,
-                nw.personalstats.networth.total
-            ).then(profitData => {
-                setDailyProfit(profitData.profit);
-                setProfitPercent(profitData.percentChange);
-            }).catch(e => console.warn("Profit sync error:", e));
-        }
-
-        // Weekly Xanax
-        fetchWeeklyXanaxUsage().then(weekly => {
-            setWeeklyXanax(weekly);
-        }).catch(e => console.warn("Xanax fetch error:", e));
-
-        // Education Courses
-        fetchEducationCourses().then(courses => {
-            if (courses) setCourseNames(courses);
-        }).catch(e => console.warn("Course fetch error:", e));
-
-        // Save daily bank snapshot for "VS Yesterday" comparison (runs in background)
-        saveBankDailySnapshot(data, nw);
-    };
-
-    // Helper: Save daily bank snapshot for "VS Yesterday" comparison
-    const saveBankDailySnapshot = async (user: TornUserData | null, nw: TornNetworth | null) => {
-        if (Platform.OS === 'web') return;
-        if (!user) return;
-
-        // Get today's date string (YYYY-MM-DD in user's timezone)
-        const now = new Date();
-        const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-        // Calculate current values
-        const moneyData = user.money;
-        const networthData = nw?.personalstats?.networth;
-        const currentWallet = Number(moneyData?.wallet) || Number(networthData?.wallet) || 0;
-        const currentStocks = Number(networthData?.stock_market) || 0;
-
-        try {
-            const storedData = await SecureStore.getItemAsync('bank_daily_snapshots');
-            let snapshots: { date: string; wallet: number; stocks: number }[] = storedData ? JSON.parse(storedData) : [];
-
-            // Check if today's snapshot already exists
-            const todayExists = snapshots.some(s => s.date === todayDate);
-            if (!todayExists) {
-                // First check of the day - save snapshot
-                snapshots.push({ date: todayDate, wallet: currentWallet, stocks: currentStocks });
-
-                // Keep only last 7 days
-                snapshots = snapshots.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 7);
-
-                await SecureStore.setItemAsync('bank_daily_snapshots', JSON.stringify(snapshots));
-                console.log('📊 Bank daily snapshot saved:', todayDate);
-            }
-        } catch (e) {
-            console.warn('Failed to save bank snapshot:', e);
-        }
-    };
 
     if (isLoading) {
         return (

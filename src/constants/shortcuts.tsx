@@ -16,70 +16,70 @@ const AVAILABLE_HOME_SHORTCUTS: ShortcutItem[] = [
         label: 'Property',
         icon: LandPlot,
         isSvg: false,
-        route: '/(qa-home)/property'
+        route: '/home/(quick-actions)/property'
     },
     {
         id: 'gym',
         label: 'Gym',
         icon: Dumbbell,
         isSvg: false,
-        route: '/(qa-home)/gym'
+        route: '/home/(quick-actions)/gym'
     },
     {
         id: 'stats',
         label: 'Stats',
         icon: FileUser,
         isSvg: false,
-        route: '/(qa-home)/stats'
+        route: '/home/(quick-actions)/stats'
     },
     {
         id: 'networth',
         label: 'Networth',
         icon: Coins,
         isSvg: false,
-        route: '/(qa-home)/networth'
+        route: '/home/(quick-actions)/networth'
     },
     {
         id: 'bank',
         label: 'Bank',
         icon: Landmark,
         isSvg: false,
-        route: '/(qa-home)/bank'
+        route: '/home/(quick-actions)/bank'
     },
     {
         id: 'market',
         label: 'Market',
         icon: ShoppingBag,
         isSvg: false,
-        route: '/(qa-home)/market' // Placeholder
+        route: '/home/(quick-actions)/market' // Placeholder
     },
     {
         id: 'faction',
         label: 'Faction',
         icon: Flag,
         isSvg: false,
-        route: '/(qa-home)/faction' // Placeholder
+        route: '/home/(quick-actions)/faction' // Placeholder
     },
     {
         id: 'travel',
         label: 'Travel',
         icon: Plane,
         isSvg: false,
-        route: '/(qa-home)/travel'
+        route: '/home/(quick-actions)/travel'
     },
     {
         id: 'alerts',
         label: 'Alerts',
         icon: Bell,
         isSvg: false,
-        route: '/(qa-home)/alerts' // Placeholder
+        route: '/home/(quick-actions)/alerts' // Placeholder
     },
     {
         id: 'settings',
         label: 'Settings',
         icon: Settings,
         isSvg: false,
-        route: '/(qa-home)/settings' // Placeholder
+        route: '/home/(quick-actions)/settings' // Placeholder
     }
 ];
 
@@ -89,28 +89,28 @@ const AVAILABLE_FACTION_SHORTCUTS: ShortcutItem[] = [
         label: 'Ranked War',
         icon: Swords,
         isSvg: false,
-        route: '/(qa-factions)/ranked-war'
+        route: '/home/(quick-actions)/faction/ranked-war'
     },
     {
         id: 'chain-list',
         label: 'Chain',
         icon: Link,
         isSvg: false,
-        route: '/(qa-factions)/chain-list'
+        route: '/home/(quick-actions)/faction/chain-list'
     },
     {
         id: 'payday',
         label: 'Payday',
         icon: Banknote,
         isSvg: false,
-        route: '/(qa-factions)/payday'
+        route: '/home/(quick-actions)/faction/payday'
     },
     {
         id: 'members',
         label: 'Members',
         icon: Users,
         isSvg: false,
-        route: '/(qa-factions)/members'
+        route: '/home/(quick-actions)/faction/members'
     }
 ];
 

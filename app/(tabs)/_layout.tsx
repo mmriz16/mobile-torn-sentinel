@@ -1,10 +1,10 @@
+import AssetsIcon from "@/assets/icons/nav-assets.svg";
+import HomeIcon from "@/assets/icons/nav-home.svg";
+import MarketIcon from "@/assets/icons/nav-market.svg";
+import ProfitIcon from "@/assets/icons/nav-profit.svg";
+import SettingsIcon from "@/assets/icons/nav-settings.svg";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AssetsIcon from "../../assets/icons/nav-assets.svg";
-import HomeIcon from "../../assets/icons/nav-home.svg";
-import MarketIcon from "../../assets/icons/nav-market.svg";
-import ProfitIcon from "../../assets/icons/nav-profit.svg";
-import SettingsIcon from "../../assets/icons/nav-settings.svg";
 
 export default function TabsLayout() {
     const insets = useSafeAreaInsets();
@@ -39,7 +39,7 @@ export default function TabsLayout() {
             }}
         >
             <Tabs.Screen
-                name="index"
+                name="home"
                 options={{
                     title: "Home",
                     tabBarIcon: ({ color }) => <HomeIcon color={color} width={24} height={24} />,

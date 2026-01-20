@@ -111,6 +111,9 @@ export default function RootLayout() {
           {!hasApiKey && <Redirect href="/(modals)/api-key" />}
 
           <Stack screenOptions={{ headerShown: false }}>
+            {/* Index Redirect */}
+            <Stack.Screen name="index" />
+
             {/* Tabs jadi root */}
             <Stack.Screen name="(tabs)" />
 

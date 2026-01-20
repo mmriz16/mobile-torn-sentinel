@@ -1,12 +1,12 @@
+import { Card } from "@/src/components/ui/card";
+import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { TitleBar } from "@/src/components/ui/title-bar";
+import { FactionMemberWithTravel, calculateTravelTimeLeft, fetchFactionMembersTravelStatus, syncFactionData } from "@/src/services/faction-service";
+import { FactionBasicData, FactionMember, fetchFactionBasic, formatFactionStatus, formatTimeRemaining } from "@/src/services/torn-api";
+import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Card } from "../../src/components/ui/card";
-import { GridPattern } from "../../src/components/ui/grid-pattern";
-import { TitleBar } from "../../src/components/ui/title-bar";
-import { FactionMemberWithTravel, calculateTravelTimeLeft, fetchFactionMembersTravelStatus, syncFactionData } from "../../src/services/faction-service";
-import { FactionBasicData, FactionMember, fetchFactionBasic, formatFactionStatus, formatTimeRemaining } from "../../src/services/torn-api";
-import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from "../../src/utils/responsive";
 
 // Extended member type with Supabase travel data
 interface MemberWithTravelData extends FactionMember {

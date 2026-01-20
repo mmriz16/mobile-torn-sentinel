@@ -1,9 +1,10 @@
+
+import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { moderateScale as ms, verticalScale as vs } from '@/src/utils/responsive';
 import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { GridPattern } from "../../src/components/ui/grid-pattern";
-import { moderateScale as ms, verticalScale as vs } from '../../src/utils/responsive';
 
-export default function OffshoreBank() {
+export default function Profit() {
     return (
         <SafeAreaView className="flex-1 bg-tactical-950">
             <GridPattern />

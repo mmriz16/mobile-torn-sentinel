@@ -6,11 +6,11 @@ import { useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Card } from "../../src/components/ui/card";
-import { GridPattern } from "../../src/components/ui/grid-pattern";
-import { supabase } from "../../src/services/supabase";
+import { Card } from "@/src/components/ui/card";
+import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { supabase } from "@/src/services/supabase";
 
-import Logo from "../../assets/logo.svg";
+import Logo from "@/assets/logo.svg";
 
 // Helper function to save API key locally (handles web vs native)
 async function saveApiKey(key: string): Promise<void> {
@@ -159,7 +159,7 @@ export default function ApiKey() {
             setStatusMessage(null);
 
             // Navigate to home
-            router.replace("/(tabs)");
+            router.replace("/home");
 
         } catch (err: any) {
             console.error("❌ Error details:", err);

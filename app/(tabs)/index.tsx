@@ -75,7 +75,7 @@ export default function Home() {
     const [showChangelog, setShowChangelog] = useState(false);
 
     // Current app version - update this when releasing new versions
-    const APP_VERSION = "1.0.5";
+    const APP_VERSION = "1.0.6";
 
     // Check if changelog should be shown (once per version)
     useEffect(() => {

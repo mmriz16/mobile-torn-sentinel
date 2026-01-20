@@ -336,17 +336,17 @@ export default function Bank() {
                 <View style={{ gap: vs(10) }}>
                     <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14) }}>Quick Actions</Text>
                     <View className="flex-row" style={{ gap: vs(10) }}>
-                        <TouchableOpacity className="flex-1" activeOpacity={0.7} onPress={() => router.push('./torn-bank' as any)}>
+                        <TouchableOpacity className="flex-1" activeOpacity={0.7} onPress={() => router.push('./bank/torn-bank' as any)}>
                             <Card className="items-center" style={{ padding: ms(16) }}>
                                 <Text className="text-white uppercase" style={{ fontFamily: 'Inter_600SemiBold', fontSize: ms(8) }}>Torn Bank</Text>
                             </Card>
                         </TouchableOpacity>
-                        <TouchableOpacity className="flex-1" activeOpacity={0.7} onPress={() => router.push('./offshore-bank' as any)}>
+                        <TouchableOpacity className="flex-1" activeOpacity={0.7} onPress={() => router.push('./bank/offshore-bank' as any)}>
                             <Card className="items-center" style={{ padding: ms(16) }}>
                                 <Text className="text-white uppercase" style={{ fontFamily: 'Inter_600SemiBold', fontSize: ms(8) }}>Offshore Bank</Text>
                             </Card>
                         </TouchableOpacity>
-                        <TouchableOpacity className="flex-1" activeOpacity={0.7} onPress={() => router.push('./company-stocks' as any)}>
+                        <TouchableOpacity className="flex-1" activeOpacity={0.7} onPress={() => router.push('./bank/company-stocks' as any)}>
                             <Card className="items-center" style={{ padding: ms(16) }}>
                                 <Text className="text-white uppercase" style={{ fontFamily: 'Inter_600SemiBold', fontSize: ms(8) }}>Company Stocks</Text>
                             </Card>

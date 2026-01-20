@@ -27,8 +27,9 @@ export default function Faction() {
     const [factionData, setFactionData] = useState<FactionBasicData | null>(null);
     const [rankedWars, setRankedWars] = useState<RankedWarsResponse | null>(null);
     const [userData, setUserData] = useState<TornUserData | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isLoading, setIsLoading] = useState(true);
-    // Tick state to force re-render every second for countdown
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [tick, setTick] = useState(0);
     // Chain end time (timestamp in ms) for countdown calculation
     const [chainEndTime, setChainEndTime] = useState(0);

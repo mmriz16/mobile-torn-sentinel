@@ -103,7 +103,7 @@ export default function TravelLoader() {
             -1,
             false
         );
-    }, []);
+    }, [progress]);
 
     const totalItems = 5;
 

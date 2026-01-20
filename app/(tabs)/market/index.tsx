@@ -29,6 +29,7 @@ export default function Market() {
     const [filter, setFilter] = useState('All');
     const [categories, setCategories] = useState<CategoryCount[]>([]);
     const [totalItems, setTotalItems] = useState(0);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isLoading, setIsLoading] = useState(true);
     const [showFilterModal, setShowFilterModal] = useState(false);
 
@@ -156,7 +157,7 @@ export default function Market() {
         setItems([]);
         setHasMore(true);
         fetchItems(0, true);
-    }, [filter, searchQuery]);
+    }, [filter, searchQuery, fetchItems]);
 
     // Load more items
     const loadMore = () => {

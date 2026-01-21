@@ -134,11 +134,12 @@ export default function Bank() {
         }
     };
 
+    // eslint-disable react-hooks/exhaustive-deps
     useEffect(() => {
         loadData();
         const interval = setInterval(loadData, 10 * 1000);
         return () => clearInterval(interval);
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Format player ID like: **** **** *238 1000
     const formatPlayerId = (id: number): string => {

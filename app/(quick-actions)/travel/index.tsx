@@ -238,9 +238,10 @@ export default function Travel() {
     }, [isLoadingStocks]);
 
     // Initial fetch only
+    // eslint-disable react-hooks/exhaustive-deps
     useEffect(() => {
         fetchStocks();
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Filter stocks client-side
     const filteredStocks = stocks.filter(stock => {

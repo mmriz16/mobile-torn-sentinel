@@ -30,6 +30,7 @@ export default function Faction() {
     const [factionData, setFactionData] = useState<FactionBasicData | null>(null);
     const [rankedWars, setRankedWars] = useState<RankedWarsResponse | null>(null);
     const [userData, setUserData] = useState<TornUserData | null>(null);
+
     // Chain end time (timestamp in ms) for countdown calculation
     const [chainEndTime, setChainEndTime] = useState(0);
     // Tick for countdowns

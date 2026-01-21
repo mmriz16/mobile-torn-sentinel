@@ -15,7 +15,12 @@ import Logo from "@/assets/logo.svg";
 // Helper function to save API key locally (handles web vs native)
 async function saveApiKey(key: string): Promise<void> {
     if (Platform.OS === "web") {
-        localStorage.setItem("tornApiKey", key);
+        // Use localStorage on web with try-catch for "The operation is insecure" error
+        try {
+            localStorage.setItem("tornApiKey", key);
+        } catch (error) {
+            console.warn("localStorage not available:", error);
+        }
     } else {
         await SecureStore.setItemAsync("tornApiKey", key);
     }
@@ -159,7 +164,7 @@ export default function ApiKey() {
             setStatusMessage(null);
 
             // Navigate to home
-            router.replace("/home");
+            router.replace("/(tabs)/home");
 
         } catch (err: any) {
             console.error("❌ Error details:", err);

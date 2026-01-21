@@ -24,10 +24,20 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // 2. Ambil API Key Torn (Nanti kita set di Secrets)
-    const tornKey = Deno.env.get('TORN_API_KEY');
-    if (!tornKey) throw new Error("TORN_API_KEY belum disetting!");
+    // 2. Ambil Key Pool (Decrypted Users)
+    const { data: users, error: userError } = await supabaseAdmin.rpc("get_decrypted_users");
 
+    if (userError || !users || users.length === 0) {
+      throw new Error("No API keys available for pool");
+    }
+
+    const validUsers = users.filter((u: any) => u.decrypted_key);
+    if (validUsers.length === 0) throw new Error("No valid keys in pool");
+
+    const randomUser = validUsers[Math.floor(Math.random() * validUsers.length)];
+    const tornKey = randomUser.decrypted_key;
+
+    console.log(`🔑 Using Key Pool: User ID ${randomUser.id}`);
     console.log("🔄 Sedang mengambil data item dari Torn API dan YATA...");
 
     // 3. Request ke Torn API dan YATA API secara paralel

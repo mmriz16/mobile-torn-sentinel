@@ -164,6 +164,33 @@ export async function fetchFactionMembersTravelStatus(factionId: number): Promis
     }
 }
 
+
+/**
+ * Fetch weekly xanax stats for all members in a faction
+ */
+export interface FactionMemberStats {
+    member_id: number;
+    xanax_weekly_usage: number;
+}
+
+export async function fetchFactionMembersStats(factionId: number): Promise<FactionMemberStats[]> {
+    try {
+        const { data, error } = await supabase.rpc('get_faction_member_stats', {
+            p_faction_id: factionId
+        });
+
+        if (error) {
+            console.error('Error fetching faction members stats:', error);
+            return [];
+        }
+
+        return (data || []) as FactionMemberStats[];
+    } catch (err) {
+        console.error('Error in fetchFactionMembersStats:', err);
+        return [];
+    }
+}
+
 /**
  * Calculate time left from arrival timestamp
  * Returns seconds remaining, or 0 if already arrived/no data

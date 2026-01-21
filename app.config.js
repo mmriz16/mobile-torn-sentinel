@@ -7,7 +7,7 @@ export default {
     expo: {
         name: IS_DEV ? "Torn Sentinel Dev" : "Torn Sentinel",
         slug: "mobile-torn-sentinel",
-        version: "1.0.0",
+        version: "1.0.13",
         orientation: "portrait",
         icon: "./assets/images/icon.png",
         scheme: "mobiletornsentinel",

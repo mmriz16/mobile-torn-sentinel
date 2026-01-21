@@ -31,7 +31,12 @@ export function getApiRequestCount(): number {
 // Get API key from storage
 export async function getApiKey(): Promise<string | null> {
     if (Platform.OS === "web") {
-        return localStorage.getItem("tornApiKey");
+        try {
+            return localStorage.getItem("tornApiKey");
+        } catch (error) {
+            console.warn("localStorage not available:", error);
+            return null;
+        }
     }
     return SecureStore.getItemAsync("tornApiKey");
 }
@@ -576,24 +581,11 @@ export async function fetchRankedWars(factionId?: number): Promise<RankedWarsRes
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         trackApiRequest();
-        // User provided: https://api.torn.com/v2/faction/rankedwars?offset=0&limit=20&sort=DESC
-
-        // V2 endpoint usually requires /{id}/ if looking for specific, or maybe it infers from key.
-        // Documentation says /v2/faction/rankedwars lists all ranked wars if no ID? 
-        // Wait, the user request says "mappingkan data... dari api ini ... https://api.torn.com/faction/?selections=basic ... https://api.torn.com/v2/faction/rankedwars?offset=0&limit=20&sort=DESC"
-        // The second URL looks like a generic RW list or maybe filtered by user's faction if authenticated? 
-        // Actually /v2/faction/rankedwars returns *global* ranked wars usually or maybe the user meant /v2/faction/{id}/rankedwars?
-        // Let's assume the user wants the specific URL they gave.
-        // But typically we want OUR faction's wars. 
-        // The example data provided shows "We Are Rising II" (ID 51896) in every entry. So it must be filtered or user's faction wars.
-        // I will use /v2/faction/rankedwars and assume it contextually returns relevant ones or use the ID if I can.
-        // BUT V2 often requires ID in path like /v2/faction/{id}/rankedwars. 
-        // Let's check the user provided URL again: `https://api.torn.com/v2/faction/rankedwars...` 
-        // It does NOT have an ID.
-        // I will stick to what the user provided.
+        // User provided: https://api.torn.com/v2/faction/rankedwars
+        // V2 Endpoint returns an array of ranked wars directly, which matches our interface.
 
         const response = await fetch(
-            `${TORN_API_V2_BASE}/faction/rankedwars?offset=0&limit=20&sort=DESC&key=${apiKey}`,
+            `${TORN_API_V2_BASE}/faction/rankedwars?limit=20&sort=DESC&key=${apiKey}`,
             { signal: controller.signal, cache: 'no-store' }
         );
         clearTimeout(timeoutId);
@@ -626,6 +618,108 @@ export function formatTimeRemaining(seconds: number): string {
         return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
     return `${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+}
+
+// Format time detailed (e.g. "02:08:23:52")
+export function formatTimeDetailed(seconds: number): string {
+    if (seconds <= 0) return "00:00:00:00";
+
+    const totalSeconds = Math.floor(seconds);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = Math.floor(totalSeconds % 60);
+
+    const dd = days.toString().padStart(2, "0");
+    const hh = hours.toString().padStart(2, "0");
+    const mm = minutes.toString().padStart(2, "0");
+    const ss = secs.toString().padStart(2, "0");
+
+    return `${dd}:${hh}:${mm}:${ss}`;
+}
+
+// Combined Faction + User Data (OPTIMIZED: 2 API calls instead of 3)
+export interface FactionDataCombined {
+    factionBasic: FactionBasicData | null;
+    rankedWars: RankedWarsResponse | null;
+    userData: TornUserData | null;
+}
+
+export async function fetchFactionDataCombined(): Promise<FactionDataCombined> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return { factionBasic: null, rankedWars: null, userData: null };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        // Make all 3 calls in parallel but with user data combined with chain info
+        trackApiRequest(); // Faction basic
+        trackApiRequest(); // Ranked wars (V2)
+        trackApiRequest(); // User data
+
+        const [factionResponse, warsResponse, userResponse] = await Promise.all([
+            fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
+            fetch(`${TORN_API_V2_BASE}/faction/rankedwars?limit=20&sort=DESC&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
+            fetch(`${TORN_API_V2_BASE}/user?selections=profile,bars&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' })
+        ]);
+
+        clearTimeout(timeoutId);
+
+        const [factionData, warsData, userData] = await Promise.all([
+            factionResponse.json(),
+            warsResponse.json(),
+            userResponse.json()
+        ]);
+
+        return {
+            factionBasic: factionData.error ? null : factionData as FactionBasicData,
+            rankedWars: warsData.error ? null : warsData as RankedWarsResponse,
+            userData: userData.error ? null : userData as TornUserData
+        };
+    } catch (error) {
+        console.error("Failed to fetch combined faction data:", error);
+        return { factionBasic: null, rankedWars: null, userData: null };
+    }
+}
+
+// Combined Faction + Ranked Wars (No User Data)
+export interface FactionDataParallel {
+    factionBasic: FactionBasicData | null;
+    rankedWars: RankedWarsResponse | null;
+}
+
+export async function fetchFactionDataParallel(): Promise<FactionDataParallel> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return { factionBasic: null, rankedWars: null };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        trackApiRequest(); // Faction basic
+        trackApiRequest(); // Ranked wars
+
+        const [factionResponse, warsResponse] = await Promise.all([
+            fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
+            fetch(`${TORN_API_V2_BASE}/faction/rankedwars?limit=20&sort=DESC&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
+        ]);
+
+        clearTimeout(timeoutId);
+
+        const [factionData, warsData] = await Promise.all([
+            factionResponse.json(),
+            warsResponse.json(),
+        ]);
+
+        return {
+            factionBasic: factionData.error ? null : factionData as FactionBasicData,
+            rankedWars: warsData.error ? null : warsData as RankedWarsResponse,
+        };
+    } catch (error) {
+        console.error("Failed to fetch parallel faction data:", error);
+        return { factionBasic: null, rankedWars: null };
+    }
 }
 
 // Format faction member status (e.g. "Traveling to UAE" -> "TO UAE")
@@ -1172,50 +1266,9 @@ export async function fetchGymDataCombined(): Promise<GymDataCombined> {
     }
 }
 
-// Combined Faction + User Data (OPTIMIZED: 2 API calls instead of 3)
-export interface FactionDataCombined {
-    factionBasic: FactionBasicData | null;
-    rankedWars: RankedWarsResponse | null;
-    userData: TornUserData | null;
-}
 
-export async function fetchFactionDataCombined(): Promise<FactionDataCombined> {
-    try {
-        const apiKey = await getApiKey();
-        if (!apiKey) return { factionBasic: null, rankedWars: null, userData: null };
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        // Make all 3 calls in parallel but with user data combined with chain info
-        trackApiRequest(); // Faction basic
-        trackApiRequest(); // Ranked wars
-        trackApiRequest(); // User data
-
-        const [factionResponse, warsResponse, userResponse] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
-            fetch(`${TORN_API_V2_BASE}/faction/rankedwars?offset=0&limit=20&sort=DESC&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
-            fetch(`${TORN_API_V2_BASE}/user?selections=profile,bars&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' })
-        ]);
-
-        clearTimeout(timeoutId);
-
-        const [factionData, warsData, userData] = await Promise.all([
-            factionResponse.json(),
-            warsResponse.json(),
-            userResponse.json()
-        ]);
-
-        return {
-            factionBasic: factionData.error ? null : factionData as FactionBasicData,
-            rankedWars: warsData.error ? null : warsData as RankedWarsResponse,
-            userData: userData.error ? null : userData as TornUserData
-        };
-    } catch (error) {
-        console.error("Failed to fetch combined faction data:", error);
-        return { factionBasic: null, rankedWars: null, userData: null };
-    }
-}
 
 // Item details interface
 export interface TornItemEffect {

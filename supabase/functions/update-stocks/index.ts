@@ -9,10 +9,24 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const TORN_KEY = Deno.env.get('TORN_API_KEY');
-    console.log('🔑 TORN_API_KEY exists:', !!TORN_KEY);
+    // 1. Get Key Pool (Decrypted Users)
+    const { data: users, error: userError } = await supabase.rpc("get_decrypted_users");
 
-    // 1. Ambil Data dari Torn
+    if (userError || !users || users.length === 0) {
+      console.error('❌ No API keys available:', userError);
+      throw new Error("No API keys available for pool");
+    }
+
+    // Filter valid keys & Pick Random
+    const validUsers = users.filter((u: any) => u.decrypted_key);
+    if (validUsers.length === 0) throw new Error("No valid keys in pool");
+
+    const randomUser = validUsers[Math.floor(Math.random() * validUsers.length)];
+    const TORN_KEY = randomUser.decrypted_key;
+
+    console.log(`🔑 Using Key Pool: User ID ${randomUser.id}`);
+
+    // 2. Fetch Data from Torn
     const tornRes = await fetch(`https://api.torn.com/torn/?selections=stocks&key=${TORN_KEY}`);
     const tornJson = await tornRes.json();
     console.log('📊 Torn API response received, has stocks:', !!tornJson.stocks);

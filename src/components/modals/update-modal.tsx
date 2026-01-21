@@ -120,7 +120,7 @@ export function UpdateModal() {
                     {/* Header */}
                     <View className="bg-tactical-800 px-5 py-4 border-b border-tactical-700">
                         <Text className="text-xl font-bold text-white text-center">
-                            🎉 What's New
+                            🎉 What&apos;s New
                         </Text>
                     </View>
 

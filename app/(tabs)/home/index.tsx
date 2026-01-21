@@ -5,6 +5,7 @@ import { ProgressBar } from "@/src/components/ui/progress-bar";
 import TravelLoader from "@/src/components/ui/travel-loader";
 import { AVAILABLE_HOME_SHORTCUTS, AVAILABLE_SHORTCUTS, DEFAULT_SHORTCUTS } from "@/src/constants/shortcuts";
 import { supabase } from "@/src/services/supabase";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
@@ -14,13 +15,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { syncUserTravelStatus } from "@/src/services/faction-service";
 import { syncNetworthAndGetProfit } from "@/src/services/profit-tracker";
 import {
+    FactionBasicData,
     fetchEducationCourses,
+    fetchFactionDataParallel,
     fetchUserDataWithNetworth,
     fetchWeeklyXanaxUsage,
     formatCurrency,
     formatNumber,
+    formatTimeDetailed,
     formatTimeRemaining,
     getApiRequestCount,
+    RankedWarsResponse,
     TornNetworth,
     TornUserData
 } from "@/src/services/torn-api";
@@ -44,6 +49,8 @@ export default function Home() {
     const router = useRouter();
     const [userData, setUserData] = useState<TornUserData | null>(null);
     const [networth, setNetworth] = useState<TornNetworth | null>(null);
+    const [factionData, setFactionData] = useState<FactionBasicData | null>(null);
+    const [rankedWars, setRankedWars] = useState<RankedWarsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [showRentNotification, setShowRentNotification] = useState(true);
     const [dailyProfit, setDailyProfit] = useState(0);
@@ -75,7 +82,7 @@ export default function Home() {
     const [showChangelog, setShowChangelog] = useState(false);
 
     // Current app version - update this when releasing new versions
-    const APP_VERSION = "1.0.7";
+    const APP_VERSION = "1.0.13";
 
     // Check if changelog should be shown (once per version)
     useEffect(() => {
@@ -103,7 +110,11 @@ export default function Home() {
         try {
             let stored: string | null = null;
             if (Platform.OS === "web") {
-                stored = localStorage.getItem("user_shortcuts");
+                try {
+                    stored = localStorage.getItem("user_shortcuts");
+                } catch (e) {
+                    console.warn("localStorage not available:", e);
+                }
             } else {
                 stored = await SecureStore.getItemAsync("user_shortcuts");
             }
@@ -120,7 +131,11 @@ export default function Home() {
         setIsShortcutModalVisible(false);
         try {
             if (Platform.OS === "web") {
-                localStorage.setItem("user_shortcuts", JSON.stringify(newShortcuts));
+                try {
+                    localStorage.setItem("user_shortcuts", JSON.stringify(newShortcuts));
+                } catch (e) {
+                    console.warn("localStorage not available:", e);
+                }
             } else {
                 await SecureStore.setItemAsync("user_shortcuts", JSON.stringify(newShortcuts));
             }
@@ -168,12 +183,17 @@ export default function Home() {
     const loadData = useCallback(async (showLoading = true) => {
         if (showLoading) setIsLoading(true);
 
-        // 1. CRITICAL DATA: Get User Data & Networth asap
-        const { userData: data, networth: nw } = await fetchUserDataWithNetworth();
+        // 1. CRITICAL DATA: Get User Data & Networth asap AND Faction Data parallel
+        const [{ userData: data, networth: nw }, { factionBasic: fac, rankedWars: wars }] = await Promise.all([
+            fetchUserDataWithNetworth(),
+            fetchFactionDataParallel()
+        ]);
 
         // Update Critical State
         setUserData(data);
         setNetworth(nw);
+        if (fac) setFactionData(fac);
+        if (wars) setRankedWars(wars);
         setApiRequestCount(getApiRequestCount());
 
         // 2. UNBLOCK UI: Stop loading immediately so user sees the app
@@ -302,7 +322,7 @@ export default function Home() {
                             const { error } = await supabase.rpc('register_secure_user', {
                                 p_id: userData.profile.id,
                                 p_username: userData.profile.name,
-                                p_faction_id: userData.money.faction || 0, // money.faction might be null, check checks
+                                p_faction_id: factionData?.ID || 0, // Use factionData.ID instead of money.faction which can be an object
                                 p_push_token: pushToken,
                                 p_api_key: apiKey
                             });
@@ -521,7 +541,7 @@ export default function Home() {
 
                     {/* Travel Card - Only show when actively traveling */}
                     {travel && travel.time_left > 0 && (
-                        <TouchableOpacity activeOpacity={1} onPress={() => router.push('/home/(quick-actions)/travel' as any)}>
+                        <TouchableOpacity activeOpacity={1} onPress={() => router.push('/(quick-actions)/travel' as any)}>
                             <Card style={{ paddingTop: vs(14) }}>
                                 <View className="flex-row items-center justify-between" style={{ paddingHorizontal: hs(14) }}>
                                     <View className="flex-1">
@@ -563,7 +583,69 @@ export default function Home() {
                         </TouchableOpacity>
                     )}
 
-                    {/* KPI Section */}
+                    {/* Ranked War Card - Only show when Active or Preparing */}
+                    {(() => {
+                        const hasActiveWar = factionData?.rank_wars && Object.keys(factionData.rank_wars).length > 0;
+                        const upcomingWar = rankedWars?.rankedwars?.find(w => w.start > Math.floor(Date.now() / 1000));
+
+                        if (hasActiveWar || upcomingWar) {
+                            return (
+                                <TouchableOpacity activeOpacity={1} onPress={() => router.push('/(quick-actions)/faction/ranked-war' as any)}>
+                                    <Card>
+                                        <View className="relative overflow-hidden flex-row justify-between items-center border-b border-tactical-800" style={{ padding: vs(16) }}>
+                                            <LinearGradient
+                                                colors={['#F43F5E', '#1C1917', '#10B981']}
+                                                start={{ x: 0, y: 0.5 }}
+                                                end={{ x: 1, y: 0.5 }}
+                                                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2 }}
+                                            />
+                                            <Text className="uppercase text-accent-red" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.name || "Unknown"}</Text>
+                                            <Text className="uppercase text-accent-green" style={{ fontFamily: "Inter_400Regular", fontSize: ms(12) }}>{factionData?.name || "Us"}</Text>
+                                        </View>
+                                        <View style={{ padding: vs(16), gap: vs(4) }}>
+                                            <View className="flex-row justify-between items-center">
+                                                <Text className="text-accent-red" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
+                                                <View className="flex-col items-center">
+                                                    <Text className="text-white/50" style={{ fontFamily: "Inter_400Regular", fontSize: ms(10) }}>Lead Target</Text>
+                                                    <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(16) }}>{(Math.abs((rankedWars?.rankedwars?.[0]?.factions?.[0]?.score || 0) - (rankedWars?.rankedwars?.[0]?.factions?.[1]?.score || 0))).toLocaleString('en-US')}/{(rankedWars?.rankedwars?.[0]?.target || 0).toLocaleString('en-US')}</Text>
+                                                </View>
+                                                <Text className="text-accent-green" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id === factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
+                                            </View>
+                                            <View className="flex-row justify-between items-center">
+                                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.chain || 0}/25</Text>
+                                                <Text className="text-accent-yellow" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>
+                                                    {(() => {
+                                                        const warStart = rankedWars?.rankedwars?.[0]?.start || 0;
+                                                        const warEnd = rankedWars?.rankedwars?.[0]?.end || 0;
+                                                        const now = Math.floor(Date.now() / 1000);
+
+                                                        // 1. Upcoming War
+                                                        if (now < warStart) {
+                                                            const timeUntilStart = warStart - now;
+                                                            return formatTimeDetailed(timeUntilStart);
+                                                        }
+
+                                                        // 2. Ongoing War
+                                                        if (warEnd === 0 || now < warEnd) {
+                                                            if (warEnd === 0) return "Ongoing";
+                                                            const timeLeft = warEnd - now;
+                                                            return formatTimeDetailed(timeLeft);
+                                                        }
+
+                                                        // 3. Ended War
+                                                        const totalDuration = warEnd - warStart;
+                                                        return totalDuration > 0 ? formatTimeDetailed(totalDuration) : 'Ended';
+                                                    })()}
+                                                </Text>
+                                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars?.[0]?.factions.find(f => f.id === factionData?.ID)?.chain || 0}/25</Text>
+                                            </View>
+                                        </View>
+                                    </Card>
+                                </TouchableOpacity>
+                            );
+                        }
+                        return null;
+                    })()}
                     <View className="flex-row" style={{ gap: hs(10) }}>
                         {/* Daily Profit Card */}
                         <Card className="flex-1" style={{ padding: ms(14) }}>
@@ -612,7 +694,7 @@ export default function Home() {
                     <View className="flex-row" style={{ gap: hs(10) }}>
                         {[
                             ...activeShortcuts.map(id => AVAILABLE_SHORTCUTS.find(s => s.id === id)).filter(Boolean),
-                            { id: 'others', label: 'Others', icon: QaOthers, isSvg: true, route: '/(quick-actions)/property' as const }
+                            { id: 'others', label: 'Others', icon: QaOthers, isSvg: true, route: '/(quick-actions)/others' as const }
                         ].map((item, index) => {
                             const Icon = item!.icon;
                             return (

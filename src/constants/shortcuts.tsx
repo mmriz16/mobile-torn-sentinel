@@ -1,4 +1,4 @@
-import { Banknote, Bell, Coins, Dumbbell, FileUser, Flag, LandPlot, Landmark, Link, Plane, Settings, ShoppingBag, Swords, Users } from 'lucide-react-native';
+import { Banknote, Coins, Dumbbell, FileUser, Flag, LandPlot, Landmark, Link, Plane, Swords, Users } from 'lucide-react-native';
 
 // Import local SVGs
 
@@ -16,71 +16,52 @@ const AVAILABLE_HOME_SHORTCUTS: ShortcutItem[] = [
         label: 'Property',
         icon: LandPlot,
         isSvg: false,
-        route: '/home/(quick-actions)/property'
+        route: '/(quick-actions)/property'
     },
     {
         id: 'gym',
         label: 'Gym',
         icon: Dumbbell,
         isSvg: false,
-        route: '/home/(quick-actions)/gym'
+        route: '/(quick-actions)/gym'
     },
     {
         id: 'stats',
         label: 'Stats',
         icon: FileUser,
         isSvg: false,
-        route: '/home/(quick-actions)/stats'
+        route: '/(quick-actions)/stats'
     },
     {
         id: 'networth',
         label: 'Networth',
         icon: Coins,
         isSvg: false,
-        route: '/home/(quick-actions)/networth'
+        route: '/(quick-actions)/networth'
     },
     {
         id: 'bank',
         label: 'Bank',
         icon: Landmark,
         isSvg: false,
-        route: '/home/(quick-actions)/bank'
+        route: '/(quick-actions)/bank'
     },
-    {
-        id: 'market',
-        label: 'Market',
-        icon: ShoppingBag,
-        isSvg: false,
-        route: '/home/(quick-actions)/market' // Placeholder
-    },
+
     {
         id: 'faction',
         label: 'Faction',
         icon: Flag,
         isSvg: false,
-        route: '/home/(quick-actions)/faction' // Placeholder
+        route: '/(quick-actions)/faction' // Placeholder
     },
     {
         id: 'travel',
         label: 'Travel',
         icon: Plane,
         isSvg: false,
-        route: '/home/(quick-actions)/travel'
+        route: '/(quick-actions)/travel'
     },
-    {
-        id: 'alerts',
-        label: 'Alerts',
-        icon: Bell,
-        isSvg: false,
-        route: '/home/(quick-actions)/alerts' // Placeholder
-    },
-    {
-        id: 'settings',
-        label: 'Settings',
-        icon: Settings,
-        isSvg: false,
-        route: '/home/(quick-actions)/settings' // Placeholder
-    }
+
 ];
 
 const AVAILABLE_FACTION_SHORTCUTS: ShortcutItem[] = [
@@ -89,28 +70,28 @@ const AVAILABLE_FACTION_SHORTCUTS: ShortcutItem[] = [
         label: 'Ranked War',
         icon: Swords,
         isSvg: false,
-        route: '/home/(quick-actions)/faction/ranked-war'
+        route: '/(quick-actions)/faction/ranked-war'
     },
     {
         id: 'chain-list',
         label: 'Chain',
         icon: Link,
         isSvg: false,
-        route: '/home/(quick-actions)/faction/chain-list'
+        route: '/(quick-actions)/faction/chain-list'
     },
     {
         id: 'payday',
         label: 'Payday',
         icon: Banknote,
         isSvg: false,
-        route: '/home/(quick-actions)/faction/payday'
+        route: '/(quick-actions)/faction/payday'
     },
     {
         id: 'members',
         label: 'Members',
         icon: Users,
         isSvg: false,
-        route: '/home/(quick-actions)/faction/members'
+        route: '/(quick-actions)/faction/members'
     }
 ];
 

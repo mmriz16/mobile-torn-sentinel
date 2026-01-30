@@ -1,4 +1,3 @@
-import QaOthers from '@/assets/icons/qa-others.svg';
 import { Card } from "@/src/components/ui/card";
 import { useRouter } from "expo-router";
 
@@ -6,7 +5,7 @@ import { ManageShortcutsModal } from "@/src/components/modals/manage-shortcuts-m
 
 import { AVAILABLE_FACTION_SHORTCUTS, DEFAULT_FACTION_SHORTCUTS } from "@/src/constants/shortcuts";
 import { syncFactionData } from "@/src/services/faction-service";
-import { FactionBasicData, fetchFactionDataCombined, formatFactionStatus, formatTimeDetailed, formatTimeRemaining, RankedWarsResponse, TornUserData } from "@/src/services/torn-api";
+import { FactionBasicData, fetchFactionBasic, fetchFactionDataCombined, formatChainStatus, formatFactionStatus, formatTimeDetailed, formatTimeRemaining, RankedWarsResponse, TornUserData } from "@/src/services/torn-api";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 
@@ -14,7 +13,7 @@ import { GridPattern } from "@/src/components/ui/grid-pattern";
 import { TitleBar } from "@/src/components/ui/title-bar";
 import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive";
 import { LinearGradient } from "expo-linear-gradient";
-import { Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Image, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // ... existing imports ...
@@ -29,11 +28,13 @@ export default function Faction() {
     const [activeShortcuts, setActiveShortcuts] = useState<string[]>(DEFAULT_FACTION_SHORTCUTS);
     const [factionData, setFactionData] = useState<FactionBasicData | null>(null);
     const [rankedWars, setRankedWars] = useState<RankedWarsResponse | null>(null);
+    const [opponentFaction, setOpponentFaction] = useState<FactionBasicData | null>(null);
     const [userData, setUserData] = useState<TornUserData | null>(null);
 
     // Chain end time (timestamp in ms) for countdown calculation
     const [chainEndTime, setChainEndTime] = useState(0);
     // Tick for countdowns
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [tick, setTick] = useState(0);
 
     useEffect(() => {
@@ -55,7 +56,18 @@ export default function Faction() {
             // Sync faction data to Supabase
             syncFactionData(basic).catch(err => console.error('Failed to sync faction:', err));
         }
-        if (wars) setRankedWars(wars);
+        if (wars) {
+            setRankedWars(wars);
+            // Fetch Opponent Faction Data
+            const opponentId = wars.rankedwars?.[0]?.factions.find(f => f.id !== basic?.ID)?.id;
+            if (opponentId) {
+                fetchFactionBasic(opponentId).then(opponentData => {
+                    setOpponentFaction(opponentData);
+                }).catch(e => console.error("Failed to fetch opponent faction:", e));
+            } else {
+                setOpponentFaction(null);
+            }
+        }
         if (user) {
             setUserData(user);
             // Calculate chain end time from current time + timeout seconds
@@ -207,71 +219,99 @@ export default function Faction() {
                 </View>
 
                 {/* War Card */}
-                <TouchableOpacity onPress={() => router.push('./ranked-war' as any)}>
-                    <Card>
-                        <View className="relative overflow-hidden flex-row justify-between items-center border-b border-tactical-800" style={{ padding: vs(16) }}>
-                            <LinearGradient
-                                colors={['#F43F5E', '#1C1917', '#10B981']}
-                                start={{ x: 0, y: 0.5 }}
-                                end={{ x: 1, y: 0.5 }}
-                                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2 }}
-                            />
-                            <Text className="uppercase text-accent-red" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars[0]?.factions.find(f => f.id !== factionData?.ID)?.name || "Unknown"}</Text>
-                            <Text className="uppercase text-accent-green" style={{ fontFamily: "Inter_400Regular", fontSize: ms(12) }}>{factionData?.name || "Us"}</Text>
-                        </View>
-                        <View style={{ padding: vs(16), gap: vs(4) }}>
-                            <View className="flex-row justify-between items-center">
-                                <Text className="text-accent-red" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars[0]?.factions.find(f => f.id !== factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
-                                <View className="flex-col items-center">
-                                    <Text className="text-white/50" style={{ fontFamily: "Inter_400Regular", fontSize: ms(10) }}>Lead Target</Text>
-                                    <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(16) }}>{(Math.abs((rankedWars?.rankedwars[0]?.factions[0]?.score || 0) - (rankedWars?.rankedwars[0]?.factions[1]?.score || 0))).toLocaleString('en-US')}/{(rankedWars?.rankedwars[0]?.target || 0).toLocaleString('en-US')}</Text>
-                                </View>
-                                <Text className="text-accent-green" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars[0]?.factions.find(f => f.id === factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
-                            </View>
-                            <View className="flex-row justify-between items-center">
-                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars[0]?.factions.find(f => f.id !== factionData?.ID)?.chain || 0}/25</Text>
-                                <Text className="text-accent-yellow" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>
-                                    {(() => {
-                                        const warStart = rankedWars?.rankedwars[0]?.start || 0;
-                                        const warEnd = rankedWars?.rankedwars[0]?.end || 0;
-                                        const now = Math.floor(Date.now() / 1000);
+                {(() => {
+                    const hasActiveWar = factionData?.rank_wars && Object.keys(factionData.rank_wars).length > 0;
+                    const upcomingWar = rankedWars?.rankedwars?.find(w => w.start > Math.floor(Date.now() / 1000));
 
-                                        // 1. Upcoming War
-                                        if (now < warStart) {
-                                            const timeUntilStart = warStart - now;
-                                            return formatTimeDetailed(timeUntilStart);
-                                        }
+                    if (hasActiveWar || upcomingWar) {
+                        return (
+                            <TouchableOpacity activeOpacity={1} onPress={() => router.push('/(quick-actions)/faction/ranked-war' as any)}>
+                                <Card>
+                                    <View className="relative overflow-hidden flex-row justify-between items-center border-b border-tactical-800" style={{ padding: vs(16) }}>
+                                        {/* Opponent Faction Image (Left) */}
+                                        {opponentFaction?.tag_image && (
+                                            <Image
+                                                source={{ uri: `https://factiontags.torn.com/${opponentFaction.tag_image}` }}
+                                                style={{ position: 'absolute', left: 0, top: 0, bottom: 0, height: '100%', width: '15%', opacity: .3 }}
+                                                resizeMode="contain"
+                                            />
+                                        )}
+                                        {/* My Faction Image (Right) */}
+                                        {factionData?.tag_image && (
+                                            <Image
+                                                source={{ uri: `https://factiontags.torn.com/${factionData.tag_image}` }}
+                                                style={{ position: 'absolute', right: 0, top: 0, bottom: 0, height: '100%', width: '15%', opacity: .3 }}
+                                                resizeMode="contain"
+                                            />
+                                        )}
 
-                                        // 2. Ongoing War (end might be 0 if unknown/indefinite, or in future)
-                                        // If end is 0, we assume it's ongoing
-                                        if (warEnd === 0 || now < warEnd) {
-                                            if (warEnd === 0) return "Ongoing"; // Fallback if no end time
-                                            const timeLeft = warEnd - now;
-                                            return formatTimeDetailed(timeLeft);
-                                        }
+                                        {/* Gradient Layer */}
+                                        <LinearGradient
+                                            colors={['rgba(244, 63, 94, .3)', 'rgba(0, 0, 0, 1)', 'rgba(16, 185, 129, .3)']}
+                                            start={{ x: 0, y: 0.5 }}
+                                            end={{ x: 1, y: 0.5 }}
+                                            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 1 }}
+                                        />
 
-                                        // 3. Ended War
-                                        const totalDuration = warEnd - warStart;
-                                        return totalDuration > 0 ? formatTimeDetailed(totalDuration) : 'Ended';
-                                    })()}
-                                </Text>
-                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars[0]?.factions.find(f => f.id === factionData?.ID)?.chain || 0}/25</Text>
-                            </View>
-                        </View>
-                    </Card>
-                </TouchableOpacity>
+                                        <Text className="uppercase text-accent-red" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12), zIndex: 10 }}>{rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.name || "Unknown"}</Text>
+                                        <Text className="uppercase text-accent-green" style={{ fontFamily: "Inter_400Regular", fontSize: ms(12), zIndex: 10 }}>{factionData?.name || "Us"}</Text>
+                                    </View>
+                                    <View style={{ padding: vs(16), gap: vs(4) }}>
+                                        <View className="flex-row justify-between items-center">
+                                            <Text className="text-accent-red" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
+                                            <View className="flex-col items-center">
+                                                <Text className="text-white/50" style={{ fontFamily: "Inter_400Regular", fontSize: ms(10) }}>Lead Target</Text>
+                                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(16) }}>{(Math.abs((rankedWars?.rankedwars?.[0]?.factions?.[0]?.score || 0) - (rankedWars?.rankedwars?.[0]?.factions?.[1]?.score || 0))).toLocaleString('en-US')}/{(rankedWars?.rankedwars?.[0]?.target || 0).toLocaleString('en-US')}</Text>
+                                            </View>
+                                            <Text className="text-accent-green" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id === factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
+                                        </View>
+                                        <View className="flex-row justify-between items-center">
+                                            <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{formatChainStatus(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.chain || 0)}</Text>
+                                            <Text className="text-accent-yellow" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>
+                                                {(() => {
+                                                    const warStart = rankedWars?.rankedwars?.[0]?.start || 0;
+                                                    const warEnd = rankedWars?.rankedwars?.[0]?.end || 0;
+                                                    const now = Math.floor(Date.now() / 1000);
+
+                                                    // 1. Upcoming War
+                                                    if (now < warStart) {
+                                                        const timeUntilStart = warStart - now;
+                                                        return formatTimeDetailed(timeUntilStart);
+                                                    }
+
+                                                    // 2. Ongoing War
+                                                    if (warEnd === 0 || now < warEnd) {
+                                                        if (warEnd === 0) return "Ongoing";
+                                                        const timeLeft = warEnd - now;
+                                                        return formatTimeDetailed(timeLeft);
+                                                    }
+
+                                                    // 3. Ended War
+                                                    const totalDuration = warEnd - warStart;
+                                                    return totalDuration > 0 ? formatTimeDetailed(totalDuration) : 'Ended';
+                                                })()}
+                                            </Text>
+                                            <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{formatChainStatus(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id === factionData?.ID)?.chain || 0)}</Text>
+                                        </View>
+                                    </View>
+                                </Card>
+                            </TouchableOpacity>
+                        );
+                    }
+                    return null;
+                })()}
 
                 {/* Quick Actions */}
                 <View className="flex-row justify-between items-center">
                     <Text className="uppercase font-sans-extrabold text-white/50" style={{ fontSize: ms(14) }}>quick actions</Text>
-                    <TouchableOpacity onPress={() => setIsShortcutModalVisible(true)}>
+                    {/* <TouchableOpacity onPress={() => setIsShortcutModalVisible(true)}>
                         <Text className="uppercase font-mono text-accent-yellow" style={{ fontSize: ms(10) }}>edit</Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                 </View>
                 <View className="flex-row" style={{ gap: hs(10) }}>
                     {[
                         ...activeShortcuts.map(id => AVAILABLE_FACTION_SHORTCUTS.find(s => s.id === id)).filter(Boolean),
-                        { id: 'others', label: 'Others', icon: QaOthers, isSvg: true, route: '/(quick-actions)/others' as const }
+                        // { id: 'others', label: 'Others', icon: QaOthers, isSvg: true, route: '/(quick-actions)/others' as const }
                     ].map((item, index) => {
                         const Icon = item!.icon;
                         return (

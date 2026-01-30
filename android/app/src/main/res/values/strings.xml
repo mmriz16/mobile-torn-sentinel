@@ -2,6 +2,8 @@
   <string name="app_name">Torn Sentinel</string>
   <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
   <string name="expo_runtime_version">1.0.0</string>
+  <string name="widget_statusoverview_description" translatable="false">Shows your Torn status overview</string>
+  <string name="widget_cooldownstatus_description" translatable="false">Shows your cooldown timers</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
 </resources>

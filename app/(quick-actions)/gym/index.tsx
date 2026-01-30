@@ -343,14 +343,14 @@ export default function Gym() {
                             </Text>
                         </View>
 
-                        <View style={{ gap: vs(10), padding: ms(16) }}>
+                        <View >
                             {isLoadingStats ? (
                                 <View className="items-center justify-center" style={{ padding: ms(20) }}>
                                     <ActivityIndicator size="small" color="#fff" />
                                 </View>
                             ) : (
                                 <>
-                                    <View className="flex-row" style={{ gap: hs(10) }}>
+                                    <View className="flex-row">
                                         <StatBox
                                             label="Strength"
                                             value={battleStats ? formatNumber(battleStats.strength) : '0'}
@@ -376,7 +376,7 @@ export default function Gym() {
                                             }}
                                         />
                                     </View>
-                                    <View className="flex-row" style={{ gap: hs(10) }}>
+                                    <View className="flex-row">
                                         <StatBox
                                             label="Speed"
                                             value={battleStats ? formatNumber(battleStats.speed) : '0'}

@@ -7,7 +7,7 @@ export default {
     expo: {
         name: IS_DEV ? "Torn Sentinel Dev" : "Torn Sentinel",
         slug: "mobile-torn-sentinel",
-        version: "1.0.13",
+        version: "1.1.0",
         orientation: "portrait",
         icon: "./assets/images/icon.png",
         scheme: "mobiletornsentinel",
@@ -44,8 +44,8 @@ export default {
                 "expo-splash-screen",
                 {
                     "image": "./assets/images/splash-icon.png",
-                    "imageWidth": 300,
-                    "imageHeight": 300,
+                    "imageWidth": 200,
+                    "imageHeight": 200,
                     "resizeMode": "contain",
                     "backgroundColor": "#000000",
                     "dark": {
@@ -53,7 +53,34 @@ export default {
                     }
                 }
             ],
-            "expo-secure-store"
+            "expo-secure-store",
+            [
+                "react-native-android-widget",
+                {
+                    widgets: [
+                        {
+                            name: "StatusOverview",
+                            label: "Status Overview",
+                            description: "Shows your Torn status overview",
+                            minWidth: "320dp",
+                            minHeight: "120dp",
+                            targetCellWidth: 4,
+                            targetCellHeight: 2,
+                            resizeMode: "horizontal|vertical",
+                        },
+                        {
+                            name: "CooldownStatus",
+                            label: "Cooldown Status",
+                            description: "Shows your cooldown timers",
+                            minWidth: "320dp",
+                            minHeight: "120dp",
+                            targetCellWidth: 4,
+                            targetCellHeight: 2,
+                            resizeMode: "horizontal|vertical",
+                        },
+                    ],
+                }
+            ]
         ],
 
         experiments: {

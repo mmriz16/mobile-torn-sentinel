@@ -82,6 +82,10 @@ export default function RootLayout() {
               name="(modals)/api-key"
               options={{ presentation: "modal" }}
             />
+            <Stack.Screen
+              name="(modals)/web-browser"
+              options={{ presentation: "modal" }}
+            />
           </Stack>
         </View>
       </View>

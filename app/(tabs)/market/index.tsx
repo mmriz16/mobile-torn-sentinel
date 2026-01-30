@@ -3,13 +3,16 @@ import { GridPattern } from "@/src/components/ui/grid-pattern";
 import { supabase } from "@/src/services/supabase";
 import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from '@/src/utils/responsive';
 import { CheckIcon, FunnelIcon, XIcon } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Image, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { fetchItemCategories } from "@/src/services/item-service"; // Import helper
+import AsyncStorage from "@react-native-async-storage/async-storage"; // Import AsyncStorage
+
 interface CategoryCount {
     type: string;
-    count: number;
+    count: number | string;
 }
 
 interface Item {
@@ -36,81 +39,16 @@ export default function Market() {
     // Items state
     const [items, setItems] = useState<Item[]>([]);
     const [isLoadingItems, setIsLoadingItems] = useState(false);
+    const isLoadingItemsRef = useRef(false);
     const [hasMore, setHasMore] = useState(true);
     const [page, setPage] = useState(0);
 
-    // Fetch categories with counts from Supabase
-    useEffect(() => {
-        const fetchCategories = async () => {
-            try {
-                setIsLoading(true);
-
-                // Get exact total count (not affected by row limit)
-                const { count: totalCount, error: countError } = await supabase
-                    .from('items')
-                    .select('*', { count: 'exact', head: true });
-
-                if (countError) {
-                    console.error('Error fetching count:', countError);
-                    return;
-                }
-
-                setTotalItems(totalCount || 0);
-
-                // Get category counts using RPC or multiple paginated queries
-                // Fetch in batches to get all items for category counting
-                const allTypes: string[] = [];
-                let offset = 0;
-                const batchSize = 1000;
-                let hasMore = true;
-
-                while (hasMore) {
-                    const { data, error } = await supabase
-                        .from('items')
-                        .select('type')
-                        .range(offset, offset + batchSize - 1);
-
-                    if (error) {
-                        console.error('Error fetching categories:', error);
-                        break;
-                    }
-
-                    if (data && data.length > 0) {
-                        allTypes.push(...data.map(item => item.type || 'Unknown'));
-                        offset += batchSize;
-                        hasMore = data.length === batchSize;
-                    } else {
-                        hasMore = false;
-                    }
-                }
-
-                // Count items per category
-                const countMap = new Map<string, number>();
-                allTypes.forEach(type => {
-                    countMap.set(type, (countMap.get(type) || 0) + 1);
-                });
-
-                // Convert to array and sort alphabetically
-                const categoriesArray: CategoryCount[] = Array.from(countMap.entries())
-                    .map(([type, count]) => ({ type, count }))
-                    .sort((a, b) => a.type.localeCompare(b.type));
-
-                setCategories(categoriesArray);
-            } catch (err) {
-                console.error('Error:', err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchCategories();
-    }, []);
-
     // Fetch items with pagination
     const fetchItems = useCallback(async (pageNum: number, reset: boolean = false) => {
-        if (isLoadingItems) return;
+        if (isLoadingItemsRef.current) return;
 
         try {
+            isLoadingItemsRef.current = true;
             setIsLoadingItems(true);
 
             let query = supabase
@@ -139,6 +77,10 @@ export default function Market() {
             if (data) {
                 if (reset) {
                     setItems(data);
+                    // Cache the first page of "All" items for instant load next time
+                    if (filter === 'All' && !searchQuery.trim()) {
+                        AsyncStorage.setItem('market_items_cache', JSON.stringify(data)).catch(() => { });
+                    }
                 } else {
                     setItems(prev => [...prev, ...data]);
                 }
@@ -147,9 +89,48 @@ export default function Market() {
         } catch (err) {
             console.error('Error:', err);
         } finally {
+            isLoadingItemsRef.current = false;
             setIsLoadingItems(false);
         }
-    }, [filter, searchQuery, isLoadingItems]);
+    }, [filter, searchQuery]);
+
+    // Optimized: Fetch categories (static list) + Load Cached items
+    useEffect(() => {
+        const loadInitialData = async () => {
+            try {
+                // 1. Load Categories (Static)
+                const staticCategories = await fetchItemCategories();
+                setCategories(staticCategories);
+
+                // 2. Load Item Count (Fast count)
+                // Note: We can skip exact count if it's slow, or keep it if head request is fast
+                const { count: totalCount } = await supabase
+                    .from('items')
+                    .select('*', { count: 'exact', head: true });
+                setTotalItems(totalCount || 0);
+
+                // 3. Load Cached Items (Instant)
+                const cachedItemsJson = await AsyncStorage.getItem('market_items_cache');
+                if (cachedItemsJson) {
+                    const cachedData = JSON.parse(cachedItemsJson);
+                    setItems(cachedData);
+                    setIsLoading(false); // Stop loading immediately
+                } else {
+                    // If no cache, trigger fetch
+                    await fetchItems(0, true);
+                    setIsLoading(false);
+                }
+
+            } catch (err) {
+                console.error('Error loading market data:', err);
+                setIsLoading(false);
+            }
+        };
+
+        loadInitialData();
+    }, [fetchItems]);
+
+
 
     // Reset and fetch items when filter or search changes
     useEffect(() => {
@@ -170,7 +151,10 @@ export default function Market() {
 
     // Format price with commas
     const formatPrice = (value: number) => {
-        if (value >= 1000000) {
+        if (value >= 1000000000) {
+            return `$${(value / 1000000000).toFixed(2)}B`;
+        }
+        else if (value >= 1000000) {
             return `$${(value / 1000000).toFixed(2)}M`;
         } else if (value >= 1000) {
             return `$${(value / 1000).toFixed(2)}K`;
@@ -339,7 +323,10 @@ export default function Market() {
 
                 <View className="flex-row justify-between items-center">
                     <Text className="text-white/50 uppercase" style={{ fontFamily: "Inter_800ExtraBold", fontSize: ms(14) }}>Market List</Text>
-                    <Text className="text-white/50 uppercase" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(10) }}>{filter === 'All' ? totalItems : (categories.find(c => c.type === filter)?.count || 0)} Items</Text>
+                    {/* Simplified count display as we don't have per-category totals anymore */}
+                    <Text className="text-white/50 uppercase" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(10) }}>
+                        {filter === 'All' ? `${totalItems}+ Items` : `${filter}`}
+                    </Text>
                 </View>
 
                 {/* Item List */}

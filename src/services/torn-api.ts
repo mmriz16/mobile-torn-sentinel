@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
@@ -18,6 +19,8 @@ function trackApiRequest() {
     } else {
         apiRequestsCount++;
     }
+    // Debug spam
+    console.log(`[API] Request #${apiRequestsCount} at ${new Date().toISOString()}`);
 }
 
 export function getApiRequestCount(): number {
@@ -68,7 +71,7 @@ export interface TornMoney {
     company: number;
     vault: number;
     cayman_bank: number;
-    city_bank: number | null;
+    city_bank: { amount: number; time_left: number } | number | null;
     city_bank_time_left: number | null;
     faction: number | null;
     daily_networth: number;
@@ -139,10 +142,13 @@ export interface TornNetworth {
 }
 
 // Networth cache
-let networthCache: TornNetworth | null = null;
-
+// Networth cache is now part of apiCache
+// Legacy getter removed as it's not used externally or should use apiCache
+// If external usage exists, we can map it to apiCache.networth?.data
 export function getNetworthCache(): TornNetworth | null {
-    return networthCache;
+    // This assumes memory cache is populated. 
+    // If called before any fetch, it might return null until hydration/fetch happens.
+    return apiCache.networth?.data || null;
 }
 
 // Bank rates interface
@@ -155,17 +161,14 @@ export interface TornBankRates {
 }
 
 // Cache for bank rates (refresh every 1 hour)
-let bankRatesCache: TornBankRates | null = null;
-let bankRatesCacheTime: number = 0;
-const BANK_RATES_CACHE_DURATION = 60 * 60 * 1000; // 1 hour
+// Cache for bank rates (1 hour TTL)
+const BANK_RATES_CACHE_DURATION = 60 * 60 * 1000;
 
 // Fetch bank interest rates
 export async function fetchBankRates(): Promise<TornBankRates | null> {
     try {
-        // Return cached rates if still valid
-        if (bankRatesCache && Date.now() - bankRatesCacheTime < BANK_RATES_CACHE_DURATION) {
-            return bankRatesCache;
-        }
+        const cached = await getCache<TornBankRates>('bankRates');
+        if (cached) return cached;
 
         const apiKey = await getApiKey();
         if (!apiKey) return null;
@@ -176,15 +179,14 @@ export async function fetchBankRates(): Promise<TornBankRates | null> {
 
         if (data.error) {
             console.error("Torn API error (bank rates):", data.error);
-            return bankRatesCache; // Return stale cache if available
+            return null;
         }
 
-        bankRatesCache = data.bank;
-        bankRatesCacheTime = Date.now();
-        return bankRatesCache;
+        setCache('bankRates', data.bank, BANK_RATES_CACHE_DURATION);
+        return data.bank;
     } catch (error) {
         console.error("Failed to fetch bank rates:", error);
-        return bankRatesCache;
+        return null;
     }
 }
 
@@ -200,6 +202,10 @@ export async function fetchCityBankDetails(): Promise<TornCityBankDetails | null
         const apiKey = await getApiKey();
         if (!apiKey) return null;
 
+        // Try cache first
+        const cached = await getCache<{ amount: number; time_left: number }>('cityBank');
+        if (cached) return cached;
+
         trackApiRequest();
         const response = await fetch(`https://api.torn.com/user/?selections=money&key=${apiKey}`);
         const data = await response.json();
@@ -211,10 +217,12 @@ export async function fetchCityBankDetails(): Promise<TornCityBankDetails | null
 
         // V1 returns city_bank as object {amount, time_left}
         if (data.city_bank && typeof data.city_bank === 'object') {
-            return {
+            const result = {
                 amount: data.city_bank.amount || 0,
                 time_left: data.city_bank.time_left || 0
             };
+            setCache('cityBank', result, 60 * 1000);
+            return result;
         }
 
         return null;
@@ -320,6 +328,10 @@ export interface RankedWarsResponse {
 // Fetch drug stats
 export async function fetchDrugStats(playerId: number): Promise<TornDrugStats | null> {
     try {
+        // Cache key based on player ID? Assumes only current user for now or single user app
+        const cached = await getCache<TornDrugStats>('drugStats');
+        if (cached) return cached;
+
         const apiKey = await getApiKey();
         if (!apiKey) return null;
 
@@ -340,6 +352,7 @@ export async function fetchDrugStats(playerId: number): Promise<TornDrugStats | 
             return null;
         }
 
+        setCache('drugStats', data as TornDrugStats, 5 * 60 * 1000); // 5 min cache
         return data as TornDrugStats;
     } catch (error) {
         console.error("Failed to fetch drug stats:", error);
@@ -355,79 +368,153 @@ export interface CombinedUserData {
 
 export async function fetchUserDataWithNetworth(): Promise<CombinedUserData> {
     try {
+        console.log("[TornAPI] fetchUserDataWithNetworth started");
+
+        // 1. Check Cache (Parallel & Before API Key)
+        const [cachedUser, cachedNetworth] = await Promise.all([
+            getCache<TornUserData>('userData'),
+            getCache<TornNetworth>('networth')
+        ]);
+
+        const result: CombinedUserData = {
+            userData: cachedUser,
+            networth: cachedNetworth
+        };
+
+        // If both cached, return early
+        if (cachedUser && cachedNetworth) {
+            console.log("[TornAPI] Cache hit for user and networth");
+            return result;
+        }
+
         const apiKey = await getApiKey();
-        if (!apiKey) return { userData: null, networth: null };
+        if (!apiKey) {
+            console.log("[TornAPI] No API key found");
+            return result;
+        }
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-        // PARALLEL fetch: V2 for user data (proper format), V1 for networth
-        // This ensures data format compatibility while reducing sequential wait time
-        trackApiRequest();
-        trackApiRequest();
+        const apiCalls: Promise<Response>[] = [];
+        const callTypes: string[] = [];
 
-        const [userResponse, networthResponse] = await Promise.all([
-            fetch(
+        // Fetch User Data if missing
+        if (!cachedUser) {
+            trackApiRequest();
+            apiCalls.push(fetch(
                 `${TORN_API_V2_BASE}/user?selections=profile,bars,cooldowns,education,travel,money,property&key=${apiKey}`,
                 { signal: controller.signal, cache: 'no-store' }
-            ),
-            fetch(
-                `https://api.torn.com/user/?selections=networth&key=${apiKey}`,
-                { signal: controller.signal, cache: 'no-store' }
-            )
-        ]);
+            ));
+            callTypes.push('user');
+        }
 
+        // Fetch Networth if missing
+        if (!cachedNetworth) {
+            trackApiRequest();
+            apiCalls.push(fetch(
+                `https://api.torn.com/user/?selections=networth,money&key=${apiKey}`,
+                { signal: controller.signal, cache: 'no-store' }
+            ));
+            callTypes.push('networth');
+        }
+
+        const responses = await Promise.all(apiCalls);
         clearTimeout(timeoutId);
 
-        const [userData, networthData] = await Promise.all([
-            userResponse.json(),
-            networthResponse.json()
-        ]);
+        const jsonPromises = responses.map(r => r.json());
+        const dataArray = await Promise.all(jsonPromises);
 
-        // Process user data (V2 format - already matches TornUserData interface)
-        let resultUserData: TornUserData | null = null;
-        if (!userData.error) {
-            resultUserData = userData as TornUserData;
-        } else {
-            console.error("Torn API error (user):", userData.error);
-        }
+        for (let i = 0; i < callTypes.length; i++) {
+            const data = dataArray[i];
+            const type = callTypes[i];
 
-        // Process networth data (V1 format - needs transformation)
-        let resultNetworth: TornNetworth | null = null;
-        if (!networthData.error && networthData.networth) {
-            resultNetworth = {
-                personalstats: {
-                    networth: {
-                        total: networthData.networth.total || 0,
-                        wallet: networthData.networth.wallet || 0,
-                        vaults: networthData.networth.vault || 0,
-                        bank: networthData.networth.bank || 0,
-                        overseas_bank: networthData.networth.cayman || 0,
-                        points: networthData.networth.points || 0,
-                        inventory: networthData.networth.items || 0,
-                        display_case: networthData.networth.displaycase || 0,
-                        bazaar: networthData.networth.bazaar || 0,
-                        item_market: networthData.networth.itemmarket || 0,
-                        property: networthData.networth.properties || 0,
-                        stock_market: networthData.networth.stockmarket || 0,
-                        auction_house: networthData.networth.auctionhouse || 0,
-                        bookie: networthData.networth.bookie || 0,
-                        company: networthData.networth.company || 0,
-                        enlisted_cars: networthData.networth.enlistedcars || 0,
-                        piggy_bank: networthData.networth.piggybank || 0,
-                        pending: networthData.networth.pending || 0,
-                        loans: networthData.networth.loan || 0,
-                        unpaid_fees: networthData.networth.unpaidfees || 0,
-                        trade: networthData.networth.trade || 0,
+            if (data.error) {
+                console.error(`Torn API error (${type}):`, data.error);
+                continue;
+            }
+
+            if (type === 'user') {
+                const userData = data as TornUserData;
+                result.userData = userData;
+                setCache('userData', userData, 10 * 1000); // 10s TTL
+            } else if (type === 'networth') {
+                // Process networth data (V1 format - needs transformation)
+                const networthData = data;
+                if (networthData.networth) {
+                    const transformed: TornNetworth = {
+                        personalstats: {
+                            networth: {
+                                total: networthData.networth.total || 0,
+                                wallet: networthData.networth.wallet || 0,
+                                vaults: networthData.networth.vault || 0,
+                                bank: networthData.networth.bank || 0,
+                                overseas_bank: networthData.networth.cayman || 0,
+                                points: networthData.networth.points || 0,
+                                inventory: networthData.networth.items || 0,
+                                display_case: networthData.networth.displaycase || 0,
+                                bazaar: networthData.networth.bazaar || 0,
+                                item_market: networthData.networth.itemmarket || 0,
+                                property: networthData.networth.properties || 0,
+                                stock_market: networthData.networth.stockmarket || 0,
+                                auction_house: networthData.networth.auctionhouse || 0,
+                                bookie: networthData.networth.bookie || 0,
+                                company: networthData.networth.company || 0,
+                                enlisted_cars: networthData.networth.enlistedcars || 0,
+                                piggy_bank: networthData.networth.piggybank || 0,
+                                pending: networthData.networth.pending || 0,
+                                loans: networthData.networth.loan || 0,
+                                unpaid_fees: networthData.networth.unpaidfees || 0,
+                                trade: networthData.networth.trade || 0,
+                            }
+                        }
+                    };
+                    result.networth = transformed;
+                    setCache('networth', transformed, 60 * 1000); // 60s TTL
+
+                    if (networthData.city_bank && typeof networthData.city_bank === 'object') {
+                        const cbData = {
+                            amount: networthData.city_bank.amount || 0,
+                            time_left: networthData.city_bank.time_left || 0
+                        };
+                        setCache('cityBank', cbData, 60 * 1000); // 60s TTL matches networth
+
+                        // Patch user data immediately if available
+                        if (result.userData && result.userData.money) {
+                            result.userData.money.city_bank = cbData;
+                        }
                     }
                 }
-            };
-            networthCache = resultNetworth;
-        } else if (networthData.error) {
-            console.error("Torn API error (networth):", networthData.error);
+            }
         }
 
-        return { userData: resultUserData, networth: resultNetworth };
+        // Final Patch: Ensure userData has city_bank info if we have it in cache
+        // This covers the case where we fetched UserData (V2) but Networth was cached (V1 not fetched)
+        // or just restored from cache.
+        if (result.userData && result.userData.money) {
+            // Check if current userData has incomplete city_bank (V2 provides amount but often no time_left?)
+            // Actually V2 money.city_bank might be number or object. 
+            // If it's missing or lacks time_left, try to patch from cityBank cache.
+            const currentCB = result.userData.money.city_bank;
+            const isComplete = typeof currentCB === 'object' && currentCB !== null && 'time_left' in currentCB;
+
+            if (!isComplete) {
+                const cachedCB = await getCache<{ amount: number; time_left: number }>('cityBank');
+                if (cachedCB) {
+                    result.userData.money.city_bank = cachedCB;
+                }
+            }
+        }
+
+        // Final patch attempt if we have both objects
+        // If we fetched user but got networth from cache, or vice versa.
+        // V1 Networth call includes city_bank time_left. V2 User call includes city_bank amount but not time_left.
+        // If we have networth data (fresh or cached), we might want to patch result.userData.
+        // However, accessing the RAW cached networth response (with city_bank) is hard if we only cached the Transformed object.
+        // Limitation: Transformed Networth object does NOT keep city_bank info. 
+        // So we only patch if we JUST fetched Networth.
+
+        return result;
     } catch (error) {
         console.error("Failed to fetch combined user data:", error);
         return { userData: null, networth: null };
@@ -464,9 +551,43 @@ export async function fetchUserData(): Promise<TornUserData | null> {
     }
 }
 
+// Fetch only user bars (lightweight for high-frequency polling)
+export async function fetchUserBars(): Promise<TornBars | null> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        trackApiRequest();
+        const response = await fetch(
+            `${TORN_API_V2_BASE}/user?selections=bars&key=${apiKey}&timestamp=${Date.now()}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        return data.bars as TornBars;
+    } catch (error) {
+        console.error("Failed to fetch user bars:", error);
+        return null;
+    }
+}
+
+// Fetch networth data using API v1 (may have different cache timing)
 // Fetch networth data using API v1 (may have different cache timing)
 export async function fetchNetworth(): Promise<TornNetworth | null> {
     try {
+        const cached = await getCache<TornNetworth>('networth');
+        if (cached) return cached;
+
         const apiKey = await getApiKey();
         if (!apiKey) return null;
 
@@ -519,7 +640,7 @@ export async function fetchNetworth(): Promise<TornNetworth | null> {
                     }
                 }
             };
-            networthCache = transformed;
+            setCache('networth', transformed, 60 * 1000); // 60s TTL
             return transformed;
         }
 
@@ -645,38 +766,95 @@ export interface FactionDataCombined {
     userData: TornUserData | null;
 }
 
-export async function fetchFactionDataCombined(): Promise<FactionDataCombined> {
+// Cache for combined faction data
+// Legacy cache variables removed - using apiCache
+// let factionDataCache: FactionDataCombined | null = null;
+// let factionDataCacheTime: number = 0;
+// const FACTION_DATA_CACHE_DURATION = 30 * 1000; // 30 seconds
+
+export async function fetchFactionDataCombined(forceRefresh = false): Promise<FactionDataCombined> {
     try {
         const apiKey = await getApiKey();
         if (!apiKey) return { factionBasic: null, rankedWars: null, userData: null };
 
+        // 1. Check Cache
+        const cachedUser = await getCache<TornUserData>('userData');
+        const cachedFaction = await getCache<FactionBasicData>('factionBasic');
+        const cachedWars = await getCache<RankedWarsResponse>('rankedWars');
+
+        const result: FactionDataCombined = {
+            factionBasic: cachedFaction,
+            rankedWars: cachedWars,
+            userData: cachedUser
+        };
+
+        if (!forceRefresh && cachedUser && cachedFaction && cachedWars) {
+            return result;
+        }
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        // Make all 3 calls in parallel but with user data combined with chain info
-        trackApiRequest(); // Faction basic
-        trackApiRequest(); // Ranked wars (V2)
-        trackApiRequest(); // User data
+        const apiCalls: Promise<Response>[] = [];
+        const callTypes: string[] = [];
 
-        const [factionResponse, warsResponse, userResponse] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
-            fetch(`${TORN_API_V2_BASE}/faction/rankedwars?limit=20&sort=DESC&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
-            fetch(`${TORN_API_V2_BASE}/user?selections=profile,bars&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' })
-        ]);
+        // Faction Basic (Refresh if missing or forced)
+        if (forceRefresh || !cachedFaction) {
+            trackApiRequest();
+            apiCalls.push(fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }));
+            callTypes.push('faction');
+        }
 
+        // Ranked Wars (Refresh if missing or forced)
+        if (forceRefresh || !cachedWars) {
+            trackApiRequest();
+            apiCalls.push(fetch(`${TORN_API_V2_BASE}/faction/rankedwars?limit=20&sort=DESC&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }));
+            callTypes.push('wars');
+        }
+
+        // User Data (Refresh if missing or forced)
+        if (forceRefresh || !cachedUser) {
+            trackApiRequest();
+            apiCalls.push(fetch(`${TORN_API_V2_BASE}/user?selections=profile,bars&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }));
+            callTypes.push('user');
+        }
+
+        if (apiCalls.length === 0) {
+            clearTimeout(timeoutId);
+            return result;
+        }
+
+        const responses = await Promise.all(apiCalls);
         clearTimeout(timeoutId);
 
-        const [factionData, warsData, userData] = await Promise.all([
-            factionResponse.json(),
-            warsResponse.json(),
-            userResponse.json()
-        ]);
+        const jsonPromises = responses.map(r => r.json());
+        const dataArray = await Promise.all(jsonPromises);
 
-        return {
-            factionBasic: factionData.error ? null : factionData as FactionBasicData,
-            rankedWars: warsData.error ? null : warsData as RankedWarsResponse,
-            userData: userData.error ? null : userData as TornUserData
-        };
+        for (let i = 0; i < callTypes.length; i++) {
+            const data = dataArray[i];
+            const type = callTypes[i];
+
+            if (data.error) {
+                console.error(`Torn API error (${type}):`, data.error);
+                continue;
+            }
+
+            if (type === 'faction') {
+                const facData = data as FactionBasicData;
+                result.factionBasic = facData;
+                setCache('factionBasic', facData, 30 * 1000);
+            } else if (type === 'wars') {
+                const warsData = data as RankedWarsResponse;
+                result.rankedWars = warsData;
+                setCache('rankedWars', warsData, 30 * 1000);
+            } else if (type === 'user') {
+                const userData = data as TornUserData;
+                result.userData = userData;
+                setCache('userData', userData, 10 * 1000);
+            }
+        }
+
+        return result;
     } catch (error) {
         console.error("Failed to fetch combined faction data:", error);
         return { factionBasic: null, rankedWars: null, userData: null };
@@ -694,28 +872,69 @@ export async function fetchFactionDataParallel(): Promise<FactionDataParallel> {
         const apiKey = await getApiKey();
         if (!apiKey) return { factionBasic: null, rankedWars: null };
 
+        // 1. Check Cache
+        const cachedFaction = await getCache<FactionBasicData>('factionBasic');
+        const cachedWars = await getCache<RankedWarsResponse>('rankedWars');
+
+        const result: FactionDataParallel = {
+            factionBasic: cachedFaction,
+            rankedWars: cachedWars
+        };
+
+        if (cachedFaction && cachedWars) {
+            return result;
+        }
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        trackApiRequest(); // Faction basic
-        trackApiRequest(); // Ranked wars
+        const apiCalls: Promise<Response>[] = [];
+        const callTypes: string[] = [];
 
-        const [factionResponse, warsResponse] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
-            fetch(`${TORN_API_V2_BASE}/faction/rankedwars?limit=20&sort=DESC&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }),
-        ]);
+        if (!cachedFaction) {
+            trackApiRequest();
+            apiCalls.push(fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }));
+            callTypes.push('faction');
+        }
 
+        if (!cachedWars) {
+            trackApiRequest();
+            apiCalls.push(fetch(`${TORN_API_V2_BASE}/faction/rankedwars?limit=20&sort=DESC&key=${apiKey}`, { signal: controller.signal, cache: 'no-store' }));
+            callTypes.push('wars');
+        }
+
+        if (apiCalls.length === 0) {
+            clearTimeout(timeoutId);
+            return result;
+        }
+
+        const responses = await Promise.all(apiCalls);
         clearTimeout(timeoutId);
 
-        const [factionData, warsData] = await Promise.all([
-            factionResponse.json(),
-            warsResponse.json(),
-        ]);
+        const jsonPromises = responses.map(r => r.json());
+        const dataArray = await Promise.all(jsonPromises);
 
-        return {
-            factionBasic: factionData.error ? null : factionData as FactionBasicData,
-            rankedWars: warsData.error ? null : warsData as RankedWarsResponse,
-        };
+        for (let i = 0; i < callTypes.length; i++) {
+            const data = dataArray[i];
+            const type = callTypes[i];
+
+            if (data.error) {
+                console.error(`Torn API error (${type}):`, data.error);
+                continue;
+            }
+
+            if (type === 'faction') {
+                const facData = data as FactionBasicData;
+                result.factionBasic = facData;
+                setCache('factionBasic', facData, 30 * 1000);
+            } else if (type === 'wars') {
+                const warsData = data as RankedWarsResponse;
+                result.rankedWars = warsData;
+                setCache('rankedWars', warsData, 30 * 1000);
+            }
+        }
+
+        return result;
     } catch (error) {
         console.error("Failed to fetch parallel faction data:", error);
         return { factionBasic: null, rankedWars: null };
@@ -789,6 +1008,13 @@ export function formatFactionStatus(status: FactionMemberStatus): string {
 // Format large numbers with commas
 export function formatNumber(num: number): string {
     return num.toLocaleString("en-US");
+}
+
+// Format chain status with next milestone
+export function formatChainStatus(current: number): string {
+    const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+    const nextMilestone = MILESTONES.find(m => m > current) || 100000;
+    return `${current.toLocaleString('en-US')}/${nextMilestone.toLocaleString('en-US')}`;
 }
 
 // Format currency
@@ -869,10 +1095,12 @@ export async function fetchWeeklyXanaxUsage(): Promise<number> {
     return Math.max(0, currentXanax - mondayXanax);
 }
 // Education courses cache
-let educationCoursesCache: Record<string, string> | null = null;
+// Education courses cache
+// let educationCoursesCache: Record<string, string> | null = null; // Legacy
 
 export async function fetchEducationCourses(): Promise<Record<string, string> | null> {
-    if (educationCoursesCache) return educationCoursesCache;
+    const cached = await getCache<Record<string, string>>('educationCourses');
+    if (cached) return cached;
 
     try {
         const apiKey = await getApiKey();
@@ -914,7 +1142,7 @@ export async function fetchEducationCourses(): Promise<Record<string, string> | 
             }
         }
 
-        educationCoursesCache = courses;
+        setCache('educationCourses', courses, 24 * 60 * 60 * 1000); // 24 hour cache
         return courses;
 
     } catch (error) {
@@ -934,6 +1162,9 @@ export interface TornBattleStats {
 
 export async function fetchBattleStats(): Promise<TornBattleStats | null> {
     try {
+        const cached = await getCache<TornBattleStats>('battleStats');
+        if (cached) return cached;
+
         const apiKey = await getApiKey();
         if (!apiKey) {
             console.error("No API key found");
@@ -961,13 +1192,16 @@ export async function fetchBattleStats(): Promise<TornBattleStats | null> {
         // API returns: { battlestats: { strength: { value, modifier, modifiers }, ... , total } }
         const stats = data.battlestats || data;
 
-        return {
+        const result = {
             strength: stats.strength?.value || stats.strength || 0,
             defense: stats.defense?.value || stats.defense || 0,
             speed: stats.speed?.value || stats.speed || 0,
             dexterity: stats.dexterity?.value || stats.dexterity || 0,
             total: stats.total || 0
         } as TornBattleStats;
+
+        setCache('battleStats', result, 10 * 60 * 1000); // 10 min cache
+        return result;
     } catch (error) {
         console.error("Failed to fetch battle stats:", error);
         return null;
@@ -975,8 +1209,12 @@ export async function fetchBattleStats(): Promise<TornBattleStats | null> {
 }
 
 // Fetch active gym ID
+// Fetch active gym ID
 export async function fetchActiveGym(): Promise<number | null> {
     try {
+        const cached = await getCache<number>('activeGym');
+        if (cached !== null) return cached;
+
         const apiKey = await getApiKey();
         if (!apiKey) return null;
 
@@ -998,7 +1236,11 @@ export async function fetchActiveGym(): Promise<number | null> {
             return null;
         }
 
-        return data.active_gym || null;
+        const activeGym = data.active_gym || null;
+        if (activeGym !== null) {
+            setCache('activeGym', activeGym, 5 * 60 * 1000);
+        }
+        return activeGym;
     } catch (error) {
         console.error("Failed to fetch active gym:", error);
         return null;
@@ -1096,25 +1338,87 @@ interface CacheEntry<T> {
     ttl: number; // TTL in milliseconds
 }
 
+// In-memory cache for synchronous access (e.g., getters)
 const apiCache: {
     battleStats?: CacheEntry<TornBattleStats>;
     activeGym?: CacheEntry<number>;
     gymModifier?: CacheEntry<number>;
     factionBasic?: CacheEntry<FactionBasicData>;
     perksData?: CacheEntry<string[]>;
+    userData?: CacheEntry<TornUserData>;
+    networth?: CacheEntry<TornNetworth>;
+    rankedWars?: CacheEntry<RankedWarsResponse>;
+    cityBank?: CacheEntry<{ amount: number; time_left: number }>;
+    bankRates?: CacheEntry<TornBankRates>;
+    drugStats?: CacheEntry<TornDrugStats>;
+    educationCourses?: CacheEntry<Record<string, string>>;
+    tornItems?: CacheEntry<Record<string, any>>;
+    // We can add more if needed
 } = {};
 
-function getCached<T>(entry: CacheEntry<T> | undefined): T | null {
-    if (!entry) return null;
-    if (Date.now() - entry.timestamp > entry.ttl) return null;
-    return entry.data;
+/**
+ * Get data from cache (Memory -> AsyncStorage)
+ */
+async function getCache<T>(key: keyof typeof apiCache): Promise<T | null> {
+    const memEntry = apiCache[key]; // Access via key strings to satisfy TS if needed, or cast
+    // Check memory first
+    if (memEntry && Date.now() - memEntry.timestamp < memEntry.ttl) {
+        return memEntry.data as T;
+    }
+
+    // Check storage
+    try {
+        // Race AsyncStorage against a timeout to prevent hanging
+        const timeoutPromise = new Promise<string | null>((resolve) => {
+            setTimeout(() => resolve(null), 1000);
+        });
+
+        const json = await Promise.race([
+            AsyncStorage.getItem(`api_cache_${key}`),
+            timeoutPromise
+        ]);
+
+        if (json) {
+            const entry = JSON.parse(json) as CacheEntry<T>;
+            if (Date.now() - entry.timestamp < entry.ttl) {
+                // Hydrate memory
+                (apiCache as any)[key] = entry;
+                return entry.data;
+            } else {
+                // Expired in storage
+                AsyncStorage.removeItem(`api_cache_${key}`).catch(() => { });
+            }
+        }
+    } catch (e) {
+        console.warn(`Failed to read cache for ${key}`, e);
+    }
+
+    return null;
 }
 
+/**
+ * Set data to cache (Memory + AsyncStorage)
+ */
 function setCache<T>(key: keyof typeof apiCache, data: T, ttl: number): void {
-    (apiCache as any)[key] = { data, timestamp: Date.now(), ttl };
+    const entry = { data, timestamp: Date.now(), ttl };
+
+    // Update memory
+    (apiCache as any)[key] = entry;
+
+    // Update storage (fire and forget)
+    AsyncStorage.setItem(`api_cache_${key}`, JSON.stringify(entry)).catch(e => {
+        console.warn(`Failed to write cache for ${key}`, e);
+    });
 }
 
 // Combined Gym Data (OPTIMIZED: 2-3 API calls instead of 4, with smart caching)
+
+export function getCachedChainStatus(): { current: number; max: number; timeout: number; cooldown: number; start: number } | null {
+    // Sync getter relies on memory cache
+    const userData = apiCache.userData?.data;
+    if (!userData?.bars?.chain) return null;
+    return userData.bars.chain;
+}
 export interface GymDataCombined {
     battleStats: TornBattleStats | null;
     userData: TornUserData | null;
@@ -1135,10 +1439,10 @@ export async function fetchGymDataCombined(): Promise<GymDataCombined> {
         if (!apiKey) return result;
 
         // Check cache for gym modifier (rarely changes, 10 min TTL)
-        const cachedModifier = getCached(apiCache.gymModifier);
+        const cachedModifier = await getCache<number>('gymModifier');
 
         // Check cache for active gym (rarely changes, 5 min TTL)
-        const cachedGym = getCached(apiCache.activeGym);
+        const cachedGym = await getCache<number>('activeGym');
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -1267,9 +1571,6 @@ export async function fetchGymDataCombined(): Promise<GymDataCombined> {
 }
 
 
-
-
-
 // Item details interface
 export interface TornItemEffect {
     effect: string;
@@ -1288,33 +1589,23 @@ export interface ItemMarketListing {
  * Fetch item details from Torn API (for effects)
  * Returns a map of itemId -> item details
  */
+/**
+ * Fetch item details from Torn API (for effects)
+ * Returns a map of itemId -> item details
+ * WARNING: 'selections=items' fetches the ENTIRE item database. Very expensive.
+ * We MUST cache this aggressively.
+ */
 export async function fetchItemDetails(itemIds: number[]): Promise<Record<number, TornItem>> {
     try {
-        const apiKey = await getApiKey();
-        if (!apiKey) return {};
+        // Try to get FULL item cache first
+        // We use a special key 'tornItems' for the massive blob
+        const cachedItems = await getCache<Record<string, any>>('tornItems');
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-        trackApiRequest();
-        const response = await fetch(
-            `https://api.torn.com/torn/?selections=items&key=${apiKey}`,
-            { signal: controller.signal, cache: 'no-store' }
-        );
-        clearTimeout(timeoutId);
-
-        const data = await response.json();
-
-        if (data.error) {
-            console.error("Torn API error:", data.error);
-            return {};
-        }
-
-        // Filter to only requested item IDs
-        const items: Record<number, TornItem> = {};
-        if (data.items) {
+        // Helper to extract needed IDs from source (whether cached or fresh)
+        const extractItems = (sourceItems: Record<string, any>) => {
+            const items: Record<number, TornItem> = {};
             for (const itemId of itemIds) {
-                const item = data.items[String(itemId)];
+                const item = sourceItems[String(itemId)];
                 if (item) {
                     items[itemId] = {
                         id: itemId,
@@ -1334,9 +1625,41 @@ export async function fetchItemDetails(itemIds: number[]): Promise<Record<number
                     };
                 }
             }
+            return items;
         }
 
-        return items;
+        if (cachedItems) {
+            return extractItems(cachedItems);
+        }
+
+        const apiKey = await getApiKey();
+        if (!apiKey) return {};
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // Long timeout for big data
+
+        trackApiRequest();
+        const response = await fetch(
+            `https://api.torn.com/torn/?selections=items&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return {};
+        }
+
+        // Cache the entire items blob for 24 hours
+        if (data.items) {
+            // 'tornItems' is not in apiCache struct yet, we need to cast or add it 
+            setCache('tornItems' as any, data.items, 24 * 60 * 60 * 1000);
+            return extractItems(data.items);
+        }
+
+        return {};
     } catch (error) {
         console.error("Failed to fetch item details:", error);
         return {};

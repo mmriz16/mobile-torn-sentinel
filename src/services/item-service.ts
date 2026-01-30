@@ -49,3 +49,55 @@ export async function fetchItemDetailsFromSupabase(itemIds: number[]): Promise<R
         return {};
     }
 }
+
+// Static list of Torn Item Categories to avoid expensive DB counts
+// These rarely change.
+export const TORN_ITEM_CATEGORIES = [
+    "Alcohol",
+    "Artifact",
+    "Book",
+    "Booster",
+    "Candy",
+    "Car",
+    "Clothing",
+    "Collectible",
+    "Defensive",
+    "Drug",
+    "Electronics",
+    "Energy Drink",
+    "Enhancer",
+    "Flower",
+    "Jewelry",
+    "Medical",
+    "Melee",
+    "Other",
+    "Pet",
+    "Plushie",
+    "Primary",
+    "Secondary",
+    "Special",
+    "Stat Enhancer",
+    "Supply Pack",
+    "Temporary",
+    "Virus",
+    "Weapon"
+];
+
+export interface CategoryCount {
+    type: string;
+    count: number | string; // Allow string for "All" or "100+"
+}
+
+/**
+ * Get item categories (Optimized: Static list instead of DB crawl)
+ * Note: We skip the exact count per category for performance, 
+ * or we could fetch it efficiently if Supabase supports a group-by count RPC.
+ * For now, we return the static list.
+ */
+export async function fetchItemCategories(): Promise<CategoryCount[]> {
+    // Return static list sorted alphabetically
+    return TORN_ITEM_CATEGORIES.sort().map(type => ({
+        type,
+        count: '' // We don't need exact counts to filter, just the types
+    }));
+}

@@ -200,3 +200,204 @@ export function calculateTravelTimeLeft(travelArrival: number | null): number {
     const now = Math.floor(Date.now() / 1000);
     return Math.max(0, travelArrival - now);
 }
+
+// =============================================
+// Ranked War Members
+// =============================================
+
+export interface RankedWarMember {
+    user_id: number;
+    faction_id: number;
+    name: string;
+    level: number;
+    score: number;
+    attacks: number;
+    status_state: string;
+    status_details: string;
+    status_until: number;
+    updated_at: string;
+}
+
+/**
+ * Fetch ranked war members from Supabase
+ */
+export async function fetchRankedWarMembersFromDB(factionId: number): Promise<RankedWarMember[]> {
+    try {
+        const { data, error } = await supabase
+            .from('ranked_war_members')
+            .select('*')
+            .eq('faction_id', factionId)
+            .order('score', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching ranked war members:', error);
+            return [];
+        }
+
+        return (data || []) as RankedWarMember[];
+    } catch (err) {
+        console.error('Error in fetchRankedWarMembers:', err);
+        return [];
+    }
+}
+
+
+export interface RankedWarOverview {
+    factions: {
+        id: number;
+        name: string;
+        score: number;
+    }[];
+}
+
+/**
+ * Fetch ranked war overview (scores) from DB by aggregating members
+ */
+export async function fetchRankedWarOverviewFromDB(): Promise<RankedWarOverview | null> {
+    try {
+        // 1. Get all members
+        const { data: members, error } = await supabase
+            .from('ranked_war_members')
+            .select('faction_id, score');
+
+        if (error) throw error;
+        if (!members) return null;
+
+        // 2. Aggregate scores
+        const scores: Record<number, number> = {};
+        const factionIds = new Set<number>();
+
+        members.forEach(m => {
+            factionIds.add(m.faction_id);
+            scores[m.faction_id] = (scores[m.faction_id] || 0) + (Number(m.score) || 0);
+        });
+
+        const ids = Array.from(factionIds);
+        if (ids.length === 0) return null;
+
+        // 3. Get faction names
+        const { data: factions, error: factionError } = await supabase
+            .from('faction')
+            .select('id, name')
+            .in('id', ids);
+
+        if (factionError) throw factionError;
+
+        // 4. Combine
+        const result = ids.map(id => {
+            const f = factions?.find(fac => fac.id === id);
+            return {
+                id,
+                name: f?.name || `Faction ${id}`,
+                score: scores[id] || 0
+            };
+        });
+
+        return { factions: result };
+    } catch (err) {
+        console.error('Error in fetchRankedWarOverviewFromDB:', err);
+        return null;
+    }
+}
+
+// =============================================
+// Ranked War Alerts
+// =============================================
+
+export interface RankedWarAlert {
+    id: number;
+    user_id: number;
+    target_user_id: number;
+    target_faction_id: number;
+    is_active: boolean;
+    last_notified_at: string | null;
+    last_notified_type: string | null;
+    created_at: string;
+}
+
+/**
+ * Toggle alert for a specific ranked war member
+ * Returns the new active state
+ */
+export async function toggleRankedWarAlert(
+    userId: number,
+    targetUserId: number,
+    targetFactionId: number
+): Promise<boolean> {
+    try {
+        // Check if alert exists
+        const { data: existing, error: fetchError } = await supabase
+            .from('ranked_war_alerts')
+            .select('id, is_active')
+            .eq('user_id', userId)
+            .eq('target_user_id', targetUserId)
+            .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') { // Not found is ok
+            console.error('Error checking existing alert:', fetchError);
+            return false;
+        }
+
+        if (existing) {
+            // Toggle existing alert
+            const newState = !existing.is_active;
+            const { error: updateError } = await supabase
+                .from('ranked_war_alerts')
+                .update({ is_active: newState })
+                .eq('id', existing.id);
+
+            if (updateError) {
+                console.error('Error updating alert:', updateError);
+                return existing.is_active;
+            }
+            return newState;
+        } else {
+            // Create new alert (active by default)
+            const { error: insertError } = await supabase
+                .from('ranked_war_alerts')
+                .insert({
+                    user_id: userId,
+                    target_user_id: targetUserId,
+                    target_faction_id: targetFactionId,
+                    is_active: true
+                });
+
+            if (insertError) {
+                // Handle Race Condition: Duplicate key means it was just created by another request
+                if (insertError.code === '23505') {
+                    // Treat as success (already created = true)
+                    return true;
+                }
+                console.error('Error creating alert:', insertError);
+                return false;
+            }
+            return true;
+        }
+    } catch (err) {
+        console.error('Error in toggleRankedWarAlert:', err);
+        return false;
+    }
+}
+
+/**
+ * Fetch active alerts for a user
+ */
+export async function fetchRankedWarAlerts(userId: number): Promise<number[]> {
+    try {
+        const { data, error } = await supabase
+            .from('ranked_war_alerts')
+            .select('target_user_id')
+            .eq('user_id', userId)
+            .eq('is_active', true);
+
+        if (error) {
+            console.error('Error fetching alerts:', error);
+            return [];
+        }
+
+        return (data || []).map(a => a.target_user_id);
+    } catch (err) {
+        console.error('Error in fetchRankedWarAlerts:', err);
+        return [];
+    }
+}

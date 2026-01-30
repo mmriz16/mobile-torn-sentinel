@@ -9,7 +9,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Dimensions, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Dimensions, Image, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { syncUserTravelStatus } from "@/src/services/faction-service";
@@ -17,9 +17,11 @@ import { syncNetworthAndGetProfit } from "@/src/services/profit-tracker";
 import {
     FactionBasicData,
     fetchEducationCourses,
+    fetchFactionBasic,
     fetchFactionDataParallel,
     fetchUserDataWithNetworth,
     fetchWeeklyXanaxUsage,
+    formatChainStatus,
     formatCurrency,
     formatNumber,
     formatTimeDetailed,
@@ -39,7 +41,7 @@ import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from 
 import EducationIcon from '@/assets/icons/education.svg';
 import QaOthers from '@/assets/icons/qa-others.svg';
 
-import { BatteryCharging, Bell, Brain, Cannabis, Coins, Columns4, Cross, Heart, Link, Smile, TrendingUp, TriangleAlert, X, Zap } from 'lucide-react-native';
+import { BatteryCharging, Bell, Brain, Cannabis, Coins, Columns4, Cross, Heart, Landmark, Link, Smile, TrendingUp, TriangleAlert, X, Zap } from 'lucide-react-native';
 
 import Changelog from '@/app/(modals)/changelog';
 
@@ -50,6 +52,7 @@ export default function Home() {
     const [userData, setUserData] = useState<TornUserData | null>(null);
     const [networth, setNetworth] = useState<TornNetworth | null>(null);
     const [factionData, setFactionData] = useState<FactionBasicData | null>(null);
+    const [opponentFaction, setOpponentFaction] = useState<FactionBasicData | null>(null);
     const [rankedWars, setRankedWars] = useState<RankedWarsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [showRentNotification, setShowRentNotification] = useState(true);
@@ -61,8 +64,11 @@ export default function Home() {
         nerve: 0,
         happy: 0,
         life: 0,
-        chain: 0
+        chain: 0,
     });
+    // Bank Investment State
+    const [bankEndTime, setBankEndTime] = useState(0);
+    const [currentBankTimeLeft, setCurrentBankTimeLeft] = useState(0);
     const [cooldownTimers, setCooldownTimers] = useState({ drug: 0, booster: 0, medical: 0, jail: 0 });
     const [travelTimer, setTravelTimer] = useState(0);
     const [barTimers, setBarTimers] = useState({
@@ -82,7 +88,7 @@ export default function Home() {
     const [showChangelog, setShowChangelog] = useState(false);
 
     // Current app version - update this when releasing new versions
-    const APP_VERSION = "1.0.13";
+    const APP_VERSION = "1.1.8";
 
     // Check if changelog should be shown (once per version)
     useEffect(() => {
@@ -193,7 +199,18 @@ export default function Home() {
         setUserData(data);
         setNetworth(nw);
         if (fac) setFactionData(fac);
-        if (wars) setRankedWars(wars);
+        if (wars) {
+            setRankedWars(wars);
+            // Fetch Opponent Faction Data
+            const opponentId = wars.rankedwars?.[0]?.factions.find(f => f.id !== fac?.ID)?.id;
+            if (opponentId) {
+                fetchFactionBasic(opponentId).then(opponentData => {
+                    setOpponentFaction(opponentData);
+                }).catch(e => console.error("Failed to fetch opponent faction:", e));
+            } else {
+                setOpponentFaction(null);
+            }
+        }
         setApiRequestCount(getApiRequestCount());
 
         // 2. UNBLOCK UI: Stop loading immediately so user sees the app
@@ -351,9 +368,9 @@ export default function Home() {
         }
 
         setCooldownEndTimes({
-            drug: now + (userData.cooldowns.drug * 1000),
-            booster: now + (userData.cooldowns.booster * 1000),
-            medical: hospitalEndTime, // Changed: use hospital time from status, not cooldowns.medical
+            drug: now + ((userData.cooldowns?.drug || 0) * 1000),
+            booster: now + ((userData.cooldowns?.booster || 0) * 1000),
+            medical: hospitalEndTime,
             jail: jailEndTime,
         });
 
@@ -368,7 +385,7 @@ export default function Home() {
         // 3. Schedule Local Notifications
         // Re-schedule whenever relevant status changes (cooldowns, bars, etc.)
         scheduleAllNotifications(userData);
-    }, [userData]); // Re-run when userData changes (includes cooldowns, status, etc.)
+    }, [userData, factionData?.ID]); // Re-run when userData changes (includes cooldowns, status, etc.)
 
     useEffect(() => {
         const updateTimers = () => {
@@ -397,6 +414,34 @@ export default function Home() {
         const interval = setInterval(updateTimers, 1000);
         return () => clearInterval(interval);
     }, [cooldownEndTimes, barEndTimes, userData?.travel]);
+
+    // Bank Investment Effects
+    useEffect(() => {
+        if (userData?.money?.city_bank && typeof userData.money.city_bank === 'object') {
+            const timeLeft = userData.money.city_bank.time_left || 0;
+            if (timeLeft > 0) {
+                setBankEndTime(Date.now() + (timeLeft * 1000));
+            } else {
+                setBankEndTime(0);
+            }
+        }
+    }, [userData]);
+
+    useEffect(() => {
+        if (bankEndTime > 0) {
+            // Initial set
+            const nowInitial = Date.now();
+            setCurrentBankTimeLeft(Math.max(0, Math.floor((bankEndTime - nowInitial) / 1000)));
+
+            const interval = setInterval(() => {
+                const now = Date.now();
+                setCurrentBankTimeLeft(Math.max(0, Math.floor((bankEndTime - now) / 1000)));
+            }, 1000);
+            return () => clearInterval(interval);
+        } else {
+            setCurrentBankTimeLeft(0);
+        }
+    }, [bankEndTime]);
 
 
 
@@ -436,6 +481,9 @@ export default function Home() {
     // Use real-time money from money selection (v2/user/money)
     const walletAmount = userData?.money?.wallet ?? 0;
 
+    // --- Bank Investment Data ---
+    // (Moved to lower block)
+
 
 
     const educationTimeLeft = education ? Math.max(0, education.until - Math.floor(Date.now() / 1000)) : 0;
@@ -453,6 +501,24 @@ export default function Home() {
     if (profile?.status?.description.startsWith("Returning to Torn from ")) {
         originCity = profile.status.description.replace("Returning to Torn from ", "");
     }
+
+    // --- Bank Investment Data ---
+    const bankData = userData?.money?.city_bank;
+    let bankInvestmentAmount = 0;
+
+    if (typeof bankData === 'object' && bankData !== null) {
+        bankInvestmentAmount = bankData.amount || 0;
+    } else if (typeof bankData === 'number') {
+        bankInvestmentAmount = bankData;
+    }
+
+    // Format Bank Time
+    const bankDays = Math.floor(currentBankTimeLeft / 86400);
+    const bankHours = Math.floor((currentBankTimeLeft % 86400) / 3600);
+    const bankMins = Math.floor((currentBankTimeLeft % 3600) / 60);
+    const bankSecs = currentBankTimeLeft % 60;
+    const bankTimeString = `${bankDays.toString().padStart(2, '0')}:${bankHours.toString().padStart(2, '0')}:${bankMins.toString().padStart(2, '0')}:${bankSecs.toString().padStart(2, '0')}`;
+
 
     // --- MAIN RENDER ---
     return (
@@ -586,21 +652,44 @@ export default function Home() {
                     {/* Ranked War Card - Only show when Active or Preparing */}
                     {(() => {
                         const hasActiveWar = factionData?.rank_wars && Object.keys(factionData.rank_wars).length > 0;
-                        const upcomingWar = rankedWars?.rankedwars?.find(w => w.start > Math.floor(Date.now() / 1000));
+                        const now = Math.floor(Date.now() / 1000);
+                        // Check for ANY relevant war (Upcoming OR Ongoing) from V2 endpoint to bridge gap
+                        const relevantWar = rankedWars?.rankedwars?.find(w => {
+                            return (w.start > now) || (w.end === 0 || w.end > now);
+                        });
 
-                        if (hasActiveWar || upcomingWar) {
+                        if (hasActiveWar || relevantWar) {
                             return (
                                 <TouchableOpacity activeOpacity={1} onPress={() => router.push('/(quick-actions)/faction/ranked-war' as any)}>
                                     <Card>
                                         <View className="relative overflow-hidden flex-row justify-between items-center border-b border-tactical-800" style={{ padding: vs(16) }}>
+                                            {/* Opponent Faction Image (Left) */}
+                                            {opponentFaction?.tag_image && (
+                                                <Image
+                                                    source={{ uri: `https://factiontags.torn.com/${opponentFaction.tag_image}` }}
+                                                    style={{ position: 'absolute', left: 0, top: 0, bottom: 0, height: '100%', width: '15%', opacity: .3 }}
+                                                    resizeMode="contain"
+                                                />
+                                            )}
+                                            {/* My Faction Image (Right) */}
+                                            {factionData?.tag_image && (
+                                                <Image
+                                                    source={{ uri: `https://factiontags.torn.com/${factionData.tag_image}` }}
+                                                    style={{ position: 'absolute', right: 0, top: 0, bottom: 0, height: '100%', width: '15%', opacity: .3 }}
+                                                    resizeMode="contain"
+                                                />
+                                            )}
+
+                                            {/* Gradient Layer */}
                                             <LinearGradient
-                                                colors={['#F43F5E', '#1C1917', '#10B981']}
+                                                colors={['rgba(244, 63, 94, .3)', 'rgba(0, 0, 0, 1)', 'rgba(16, 185, 129, .3)']}
                                                 start={{ x: 0, y: 0.5 }}
                                                 end={{ x: 1, y: 0.5 }}
-                                                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2 }}
+                                                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 1 }} // Increased opacity to 0.6 to show gradient better over images
                                             />
-                                            <Text className="uppercase text-accent-red" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.name || "Unknown"}</Text>
-                                            <Text className="uppercase text-accent-green" style={{ fontFamily: "Inter_400Regular", fontSize: ms(12) }}>{factionData?.name || "Us"}</Text>
+
+                                            <Text className="uppercase text-accent-red" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12), zIndex: 10 }}>{rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.name || "Unknown"}</Text>
+                                            <Text className="uppercase text-accent-green" style={{ fontFamily: "Inter_400Regular", fontSize: ms(12), zIndex: 10 }}>{factionData?.name || "Us"}</Text>
                                         </View>
                                         <View style={{ padding: vs(16), gap: vs(4) }}>
                                             <View className="flex-row justify-between items-center">
@@ -612,7 +701,7 @@ export default function Home() {
                                                 <Text className="text-accent-green" style={{ fontFamily: "JetBrainsMono_800ExtraBold", fontSize: ms(28) }}>{(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id === factionData?.ID)?.score || 0).toLocaleString('en-US')}</Text>
                                             </View>
                                             <View className="flex-row justify-between items-center">
-                                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.chain || 0}/25</Text>
+                                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{formatChainStatus(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id !== factionData?.ID)?.chain || 0)}</Text>
                                                 <Text className="text-accent-yellow" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>
                                                     {(() => {
                                                         const warStart = rankedWars?.rankedwars?.[0]?.start || 0;
@@ -637,7 +726,7 @@ export default function Home() {
                                                         return totalDuration > 0 ? formatTimeDetailed(totalDuration) : 'Ended';
                                                     })()}
                                                 </Text>
-                                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{rankedWars?.rankedwars?.[0]?.factions.find(f => f.id === factionData?.ID)?.chain || 0}/25</Text>
+                                                <Text className="text-white" style={{ fontFamily: "JetBrainsMono_400Regular", fontSize: ms(12) }}>{formatChainStatus(rankedWars?.rankedwars?.[0]?.factions.find(f => f.id === factionData?.ID)?.chain || 0)}</Text>
                                             </View>
                                         </View>
                                     </Card>
@@ -723,9 +812,9 @@ export default function Home() {
                     {/* Status Overview */}
                     <Card>
                         <Text className="uppercase text-tactical-700 border-b border-tactical-800" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14), padding: ms(14) }}>status overview</Text>
-                        <View style={{ gap: vs(10), padding: ms(14) }}>
+                        <View>
                             {/* ROW 1 */}
-                            <View className="flex-row" style={{ gap: hs(10) }}>
+                            <View className="flex-row">
                                 {/* Energy */}
                                 <StatusBox
                                     icon={<Zap size={ms(10)} color="#10B981" />}
@@ -735,7 +824,7 @@ export default function Home() {
                                     max={bars?.energy?.maximum ?? 0}
                                     timer={barTimers.energy}
                                     fillColor="bg-accent-green"
-
+                                    className="rounded-none rounded-tl-sm"
                                 />
                                 {/* Nerve */}
                                 <StatusBox
@@ -746,6 +835,7 @@ export default function Home() {
                                     max={bars?.nerve?.maximum ?? 0}
                                     timer={barTimers.nerve}
                                     fillColor="bg-accent-red"
+                                    className="rounded-none border-l-0"
                                 />
                                 {/* Happy */}
                                 <StatusBox
@@ -756,10 +846,11 @@ export default function Home() {
                                     max={bars?.happy?.maximum ?? 0}
                                     timer={barTimers.happy}
                                     fillColor="bg-accent-yellow"
+                                    className="rounded-none rounded-tr-sm border-l-0"
                                 />
                             </View>
                             {/* ROW 2 */}
-                            <View className="flex-row" style={{ gap: hs(10) }}>
+                            <View className="flex-row">
                                 {/* Life */}
                                 <StatusBox
                                     icon={<Heart size={ms(10)} color="#0EA5E9" />}
@@ -769,9 +860,10 @@ export default function Home() {
                                     max={bars?.life?.maximum ?? 0}
                                     timer={barTimers.life}
                                     fillColor="bg-accent-blue"
+                                    className="rounded-none rounded-bl-sm border-t-0"
                                 />
                                 {/* Chain */}
-                                <View className="flex-1 bg-tactical-950 border border-tactical-800 rounded-sm" style={{ paddingTop: vs(10) }}>
+                                <View className="flex-1 bg-tactical-950 border border-tactical-800 rounded-none rounded-br-sm border-l-0 border-t-0" style={{ paddingTop: vs(10) }}>
                                     <View style={{ paddingHorizontal: hs(10) }}>
                                         <View className="flex-row items-center justify-between">
                                             <View className="flex-row items-center" style={{ gap: hs(4) }}>
@@ -822,34 +914,38 @@ export default function Home() {
                                 mon-sun: <Text className="text-accent-blue">{weeklyXanax} xanax</Text>
                             </Text>
                         </View>
-                        <View style={{ gap: vs(10), padding: ms(14) }}>
+                        <View>
                             {/* ROW 1 */}
-                            <View className="flex-row" style={{ gap: hs(10) }}>
+                            <View className="flex-row">
                                 <CooldownBox
                                     icon={<Cannabis size={ms(10)} color="rgba(255,255,255,0.5)" />}
                                     label="Drugs"
                                     timer={cooldownTimers.drug}
+                                    className={`rounded-none rounded-tl-sm ${!education ? 'rounded-bl-sm' : ''}`}
                                 />
                                 <CooldownBox
                                     icon={<BatteryCharging size={ms(10)} color="rgba(255,255,255,0.5)" />}
                                     label="Booster"
                                     timer={cooldownTimers.booster}
+                                    className="rounded-none border-l-0"
                                 />
                                 <CooldownBox
                                     icon={<Cross size={ms(10)} color="rgba(255,255,255,0.5)" />}
                                     label="Medical"
                                     timer={cooldownTimers.medical}
+                                    className="rounded-none border-l-0"
                                 />
                                 <CooldownBox
                                     icon={<Columns4 size={ms(10)} color="rgba(255,255,255,0.5)" />}
                                     label="Jail"
                                     timer={cooldownTimers.jail}
+                                    className={`rounded-none rounded-tr-sm border-l-0 ${!education ? 'rounded-br-sm' : ''}`}
                                 />
                             </View>
 
                             {/* Education ROW */}
-                            {education && (
-                                <View className="flex-row bg-tactical-950 border items-center border-tactical-800 rounded-sm" style={{ padding: ms(10), gap: hs(8) }}>
+                            {education && educationTimeLeft > 0 && (
+                                <View className="flex-row bg-tactical-950 border items-center border-tactical-800 rounded-none rounded-b-sm border-t-0" style={{ padding: ms(10), gap: hs(8) }}>
                                     <View className="bg-tactical-950 border border-tactical-800 rounded-sm items-center justify-center" style={{ padding: ms(10), width: ms(38), height: ms(38) }}>
                                         <EducationIcon width={ms(24)} height={ms(24)} color="#F59E0B" />
                                     </View>
@@ -862,6 +958,25 @@ export default function Home() {
                                     <View className="items-end" style={{ gap: vs(4) }}>
                                         <Text className="text-white/50 font-sans-extrabold uppercase" style={{ fontSize: ms(10) }}>ETA</Text>
                                         <Text className="text-accent-yellow font-mono uppercase" style={{ fontSize: ms(12) }}>{educationTimeString}</Text>
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Bank Investment ROW */}
+                            {bankInvestmentAmount > 0 && currentBankTimeLeft > 0 && (
+                                <View className="flex-row bg-tactical-950 border items-center border-tactical-800 rounded-none rounded-b-sm border-t-0" style={{ padding: ms(10), gap: hs(8) }}>
+                                    <View className="bg-tactical-950 border border-tactical-800 rounded-sm items-center justify-center" style={{ padding: ms(10), width: ms(38), height: ms(38) }}>
+                                        <Landmark size={ms(24)} color="#F59E0B" />
+                                    </View>
+                                    <View className="flex-1" style={{ gap: vs(4) }}>
+                                        <Text className="text-white/50 font-mono-extrabold uppercase" style={{ fontSize: ms(10) }}>torn bank investment</Text>
+                                        <Text className="text-white font-sans-extrabold" style={{ fontSize: ms(12) }} numberOfLines={1}>
+                                            {formatCurrency(bankInvestmentAmount)}
+                                        </Text>
+                                    </View>
+                                    <View className="items-end" style={{ gap: vs(4) }}>
+                                        <Text className="text-white/50 font-sans-extrabold uppercase" style={{ fontSize: ms(10) }}>ETA</Text>
+                                        <Text className="text-accent-yellow font-mono uppercase" style={{ fontSize: ms(12) }}>{bankTimeString}</Text>
                                     </View>
                                 </View>
                             )}
@@ -893,8 +1008,8 @@ export default function Home() {
 
 // --- Helper Components untuk mempersingkat kode dan memastikan konsistensi scale ---
 
-const StatusBox = ({ icon, label, labelColor, current, max, timer, fillColor }: any) => (
-    <View className="flex-1 bg-tactical-950 border border-tactical-800 rounded-sm" style={{ paddingTop: vs(10) }}>
+const StatusBox = ({ icon, label, labelColor, current, max, timer, fillColor, className }: any) => (
+    <View className={`flex-1 bg-tactical-950 border border-tactical-800 rounded-sm ${className}`} style={{ paddingTop: vs(10) }}>
         <View style={{ paddingHorizontal: hs(10) }}>
             <View className="flex-row items-center" style={{ gap: hs(4) }}>
                 {icon}
@@ -921,8 +1036,8 @@ const StatusBox = ({ icon, label, labelColor, current, max, timer, fillColor }: 
     </View>
 );
 
-const CooldownBox = ({ icon, label, timer }: any) => (
-    <View className="flex-1 bg-tactical-950 border border-tactical-800 rounded-sm" style={{ paddingTop: vs(10) }}>
+const CooldownBox = ({ icon, label, timer, className }: any) => (
+    <View className={`flex-1 bg-tactical-950 border border-tactical-800 rounded-sm ${className}`} style={{ paddingTop: vs(10) }}>
         <View style={{ paddingHorizontal: hs(10) }}>
             <View className="flex-row items-center" style={{ gap: hs(4) }}>
                 {icon}

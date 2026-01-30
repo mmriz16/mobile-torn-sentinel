@@ -5,8 +5,9 @@ import { TitleBar } from "@/src/components/ui/title-bar";
 import { FactionMemberWithTravel, calculateTravelTimeLeft, fetchFactionMembersStats, fetchFactionMembersTravelStatus, syncFactionData } from "@/src/services/faction-service";
 import { FactionBasicData, FactionMember, fetchFactionBasic, formatFactionStatus, formatTimeRemaining } from "@/src/services/torn-api";
 import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { CheckIcon, ChevronDown, Filter, XIcon } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, FlatList, Modal, RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Extended member type with Supabase travel data
@@ -28,6 +29,15 @@ export default function MemberFaction() {
     const [tick, setTick] = useState(0);
     const [isFocused, setIsFocused] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Filter Modal State
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const [xanaxFilter, setXanaxFilter] = useState<'All' | '<6' | '>6'>('All');
+    const [levelFilter, setLevelFilter] = useState<'All' | '<25' | '25-50' | '50-75' | '>75'>('All');
+
+    // Dropdown expanded states
+    const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+    const [levelDropdownOpen, setLevelDropdownOpen] = useState(false);
 
     // Initial load
     useEffect(() => {
@@ -84,8 +94,9 @@ export default function MemberFaction() {
         setRefreshing(false);
     }, []);
 
-    const sortedMembers: MemberWithTravelData[] = factionData
-        ? Object.entries(factionData.members)
+    const sortedMembers: MemberWithTravelData[] = useMemo(() => {
+        if (!factionData) return [];
+        return Object.entries(factionData.members)
             .map(([id, member]) => {
                 const numId = Number(id);
                 const supabaseData = travelStatusMap.get(numId);
@@ -104,21 +115,30 @@ export default function MemberFaction() {
                 const roleB = roles[b.position] || 99;
                 if (roleA !== roleB) return roleA - roleB;
                 return b.level - a.level;
-            })
-        : [];
+            });
+    }, [factionData, travelStatusMap, statsMap]);
 
-    const filteredMembers = sortedMembers.filter(member => {
+    const filteredMembers = useMemo(() => sortedMembers.filter(member => {
         // First apply search filter
         if (searchQuery && !member.name.toLowerCase().includes(searchQuery.toLowerCase())) {
             return false;
         }
-        // Then apply status filter
-        if (filter === 'All') return true;
-        if (filter === 'Okay') return member.status.state === 'Okay';
-        if (filter === 'Travel') return ['Traveling', 'Abroad'].includes(member.status.state);
-        if (filter === 'Hospital') return member.status.state === 'Hospital';
+        // Apply status filter
+        if (filter !== 'All') {
+            if (filter === 'Okay' && member.status.state !== 'Okay') return false;
+            if (filter === 'Travel' && !['Traveling', 'Abroad'].includes(member.status.state)) return false;
+            if (filter === 'Hospital' && member.status.state !== 'Hospital') return false;
+        }
+        // Apply xanax filter
+        if (xanaxFilter === '<6' && member.xanaxWeekly >= 6) return false;
+        if (xanaxFilter === '>6' && member.xanaxWeekly < 6) return false;
+        // Apply level filter
+        if (levelFilter === '<25' && member.level >= 25) return false;
+        if (levelFilter === '25-50' && (member.level < 25 || member.level > 50)) return false;
+        if (levelFilter === '50-75' && (member.level < 50 || member.level > 75)) return false;
+        if (levelFilter === '>75' && member.level <= 75) return false;
         return true;
-    });
+    }), [sortedMembers, searchQuery, filter, xanaxFilter, levelFilter]);
 
     // Get travel time - prefer Supabase data if available (more accurate)
     // This function is called on every render (every second due to tick)
@@ -176,23 +196,57 @@ export default function MemberFaction() {
                             outlineStyle: 'none' as any
                         }}
                     />
+                    <TouchableOpacity
+                        className="bg-accent-yellow w-[48px] h-[48px] items-center justify-center"
+                        style={{ borderRadius: ms(8) }}
+                        onPress={() => setShowFilterModal(true)}
+                        activeOpacity={0.8}
+                    >
+                        <Filter size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
                 </View>
 
-                {/* Filter */}
-                <View className="flex-row items-center" style={{ gap: hs(8) }}>
-                    <TouchableOpacity className="flex-1" onPress={() => setFilter('All')}>
-                        <Text className={`text-center rounded-full ${filter === 'All' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(4), paddingHorizontal: hs(8) }}>All ({sortedMembers.length})</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity className="flex-1" onPress={() => setFilter('Okay')}>
-                        <Text className={`text-center rounded-full ${filter === 'Okay' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(4), paddingHorizontal: hs(8) }}>Okay ({sortedMembers.filter(member => member.status.state === 'Okay').length})</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity className="flex-1" onPress={() => setFilter('Travel')}>
-                        <Text className={`text-center rounded-full ${filter === 'Travel' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(4), paddingHorizontal: hs(8) }}>Travel ({sortedMembers.filter(member => ['Traveling', 'Abroad'].includes(member.status.state)).length})</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity className="flex-1" onPress={() => setFilter('Hospital')}>
-                        <Text className={`text-center rounded-full ${filter === 'Hospital' ? 'text-tactical-950 bg-accent-yellow border border-accent-yellow' : 'text-white bg-tactical-900 border border-tactical-800'}`} style={{ fontFamily: "Inter_500Medium", fontSize: ms(12), paddingVertical: vs(4), paddingHorizontal: hs(8) }}>Hospital ({sortedMembers.filter(member => member.status.state === 'Hospital').length})</Text>
-                    </TouchableOpacity>
-                </View>
+                {/* Active Filters Badge */}
+                {(filter !== 'All' || xanaxFilter !== 'All' || levelFilter !== 'All') && (
+                    <View className="flex-row flex-wrap items-center" style={{ gap: hs(8) }}>
+                        {filter !== 'All' && (
+                            <TouchableOpacity
+                                className="flex-row items-center bg-accent-yellow/20 border border-accent-yellow rounded-full"
+                                style={{ paddingVertical: vs(4), paddingHorizontal: hs(12), gap: hs(6) }}
+                                onPress={() => setFilter('All')}
+                            >
+                                <Text className="text-accent-yellow" style={{ fontFamily: "Inter_500Medium", fontSize: ms(12) }}>
+                                    {filter}
+                                </Text>
+                                <XIcon size={ms(14)} color="#F59E0B" />
+                            </TouchableOpacity>
+                        )}
+                        {xanaxFilter !== 'All' && (
+                            <TouchableOpacity
+                                className="flex-row items-center bg-accent-yellow/20 border border-accent-yellow rounded-full"
+                                style={{ paddingVertical: vs(4), paddingHorizontal: hs(12), gap: hs(6) }}
+                                onPress={() => setXanaxFilter('All')}
+                            >
+                                <Text className="text-accent-yellow" style={{ fontFamily: "Inter_500Medium", fontSize: ms(12) }}>
+                                    {xanaxFilter === '<6' ? 'Use <6 Xanax' : 'Use ≥6 Xanax'}
+                                </Text>
+                                <XIcon size={ms(14)} color="#F59E0B" />
+                            </TouchableOpacity>
+                        )}
+                        {levelFilter !== 'All' && (
+                            <TouchableOpacity
+                                className="flex-row items-center bg-accent-yellow/20 border border-accent-yellow rounded-full"
+                                style={{ paddingHorizontal: hs(12), gap: hs(6) }}
+                                onPress={() => setLevelFilter('All')}
+                            >
+                                <Text className="text-accent-yellow" style={{ fontFamily: "Inter_500Medium", fontSize: ms(12) }}>
+                                    {levelFilter === '<25' ? '<25 Level' : levelFilter === '25-50' ? '25-50 Level' : levelFilter === '50-75' ? '50-75 Level' : '>75 Level'}
+                                </Text>
+                                <XIcon size={ms(14)} color="#F59E0B" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
 
                 {isLoading ? (
                     <View className="flex-1 justify-center items-center">
@@ -265,6 +319,179 @@ export default function MemberFaction() {
                         }}
                     />
                 )}
+
+                {/* Filter Modal */}
+                <Modal
+                    visible={showFilterModal}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowFilterModal(false)}
+                >
+                    <View className="flex-1 justify-end bg-black/50">
+                        <View className="bg-tactical-950 rounded-t-[20px] border-t border-tactical-800" style={{ maxHeight: '70%' }}>
+                            {/* Header */}
+                            <View className="flex-row justify-between items-center border-b border-tactical-800" style={{ padding: ms(16) }}>
+                                <Text className="text-white" style={{ fontFamily: "Inter_700Bold", fontSize: ms(18) }}>
+                                    Filter Members
+                                </Text>
+                                <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                                    <XIcon size={ms(24)} color="#A8A29E" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Filter Content */}
+                            <ScrollView style={{ padding: ms(16) }} contentContainerStyle={{ gap: vs(20) }}>
+                                {/* Status Filter - Dropdown */}
+                                <View style={{ gap: vs(8) }}>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: "Inter_600SemiBold", fontSize: ms(12) }}>
+                                        Status
+                                    </Text>
+                                    <TouchableOpacity
+                                        className="flex-row justify-between items-center bg-tactical-900 border border-tactical-800 rounded-[10px]"
+                                        style={{ padding: ms(14) }}
+                                        onPress={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                                    >
+                                        <Text className="text-white" style={{ fontFamily: "Inter_500Medium", fontSize: ms(14) }}>
+                                            {filter === 'All' ? 'All Status' : filter}
+                                        </Text>
+                                        <ChevronDown
+                                            size={ms(20)}
+                                            color="#A8A29E"
+                                            style={{ transform: [{ rotate: statusDropdownOpen ? '180deg' : '0deg' }] }}
+                                        />
+                                    </TouchableOpacity>
+                                    {statusDropdownOpen && (
+                                        <View className="bg-tactical-900 border border-tactical-800 rounded-[10px] overflow-hidden">
+                                            {(['All', 'Okay', 'Travel', 'Hospital'] as const).map((option, index) => (
+                                                <TouchableOpacity
+                                                    key={option}
+                                                    className={`flex-row justify-between items-center ${filter === option ? 'bg-accent-yellow/20' : ''} ${index > 0 ? 'border-t border-tactical-800' : ''}`}
+                                                    style={{ padding: ms(14) }}
+                                                    onPress={() => {
+                                                        setFilter(option);
+                                                        setStatusDropdownOpen(false);
+                                                    }}
+                                                >
+                                                    <Text
+                                                        className={filter === option ? 'text-accent-yellow' : 'text-white'}
+                                                        style={{ fontFamily: "Inter_500Medium", fontSize: ms(14) }}
+                                                    >
+                                                        {option === 'All' ? 'All Status' : option}
+                                                    </Text>
+                                                    {filter === option && (
+                                                        <CheckIcon size={ms(18)} color="#F59E0B" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+                                </View>
+
+                                {/* Xanax Usage Filter - Radio Buttons */}
+                                <View style={{ gap: vs(12) }}>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: "Inter_600SemiBold", fontSize: ms(12) }}>
+                                        Xanax Usage (Weekly)
+                                    </Text>
+                                    <View className="flex-row" style={{ gap: hs(8) }}>
+                                        {(['All', '<6', '>6'] as const).map((option) => (
+                                            <TouchableOpacity
+                                                key={option}
+                                                className={`flex-1 flex-row items-center justify-center rounded-full border ${xanaxFilter === option ? 'bg-accent-yellow border-accent-yellow' : 'bg-tactical-900 border-tactical-800'}`}
+                                                style={{ paddingVertical: vs(10), paddingHorizontal: hs(12), gap: hs(6) }}
+                                                onPress={() => setXanaxFilter(option)}
+                                            >
+                                                <View
+                                                    className={`w-[16px] h-[16px] rounded-full border-2 items-center justify-center ${xanaxFilter === option ? 'border-tactical-950' : 'border-tactical-600'}`}
+                                                >
+                                                    {xanaxFilter === option && (
+                                                        <View className="w-[8px] h-[8px] rounded-full bg-tactical-950" />
+                                                    )}
+                                                </View>
+                                                <Text
+                                                    className={xanaxFilter === option ? 'text-tactical-950' : 'text-white'}
+                                                    style={{ fontFamily: "Inter_500Medium", fontSize: ms(12) }}
+                                                >
+                                                    {option === 'All' ? 'All' : option === '<6' ? '<6' : '≥6'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+
+                                {/* Level Filter - Dropdown */}
+                                <View style={{ gap: vs(8) }}>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: "Inter_600SemiBold", fontSize: ms(12) }}>
+                                        Level Range
+                                    </Text>
+                                    <TouchableOpacity
+                                        className="flex-row justify-between items-center bg-tactical-900 border border-tactical-800 rounded-[10px]"
+                                        style={{ padding: ms(14) }}
+                                        onPress={() => setLevelDropdownOpen(!levelDropdownOpen)}
+                                    >
+                                        <Text className="text-white" style={{ fontFamily: "Inter_500Medium", fontSize: ms(14) }}>
+                                            {levelFilter === 'All' ? 'All Levels' : levelFilter === '<25' ? '<25 Level' : levelFilter === '>75' ? '>75 Level' : `${levelFilter} Level`}
+                                        </Text>
+                                        <ChevronDown
+                                            size={ms(20)}
+                                            color="#A8A29E"
+                                            style={{ transform: [{ rotate: levelDropdownOpen ? '180deg' : '0deg' }] }}
+                                        />
+                                    </TouchableOpacity>
+                                    {levelDropdownOpen && (
+                                        <View className="bg-tactical-900 border border-tactical-800 rounded-[10px] overflow-hidden">
+                                            {(['All', '<25', '25-50', '50-75', '>75'] as const).map((option, index) => (
+                                                <TouchableOpacity
+                                                    key={option}
+                                                    className={`flex-row justify-between items-center ${levelFilter === option ? 'bg-accent-yellow/20' : ''} ${index > 0 ? 'border-t border-tactical-800' : ''}`}
+                                                    style={{ padding: ms(14) }}
+                                                    onPress={() => {
+                                                        setLevelFilter(option);
+                                                        setLevelDropdownOpen(false);
+                                                    }}
+                                                >
+                                                    <Text
+                                                        className={levelFilter === option ? 'text-accent-yellow' : 'text-white'}
+                                                        style={{ fontFamily: "Inter_500Medium", fontSize: ms(14) }}
+                                                    >
+                                                        {option === 'All' ? 'All Levels' : option === '<25' ? '<25 Level' : option === '>75' ? '>75 Level' : `${option} Level`}
+                                                    </Text>
+                                                    {levelFilter === option && (
+                                                        <CheckIcon size={ms(18)} color="#F59E0B" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+                                </View>
+
+                                {/* Reset & Apply Buttons */}
+                                <View className="flex-row" style={{ gap: hs(12) }}>
+                                    <TouchableOpacity
+                                        className="flex-1 items-center justify-center bg-tactical-900 border border-tactical-800 rounded-[10px]"
+                                        onPress={() => {
+                                            setFilter('All');
+                                            setXanaxFilter('All');
+                                            setLevelFilter('All');
+                                        }}
+                                    >
+                                        <Text className="text-white" style={{ fontFamily: "Inter_600SemiBold", fontSize: ms(14) }}>
+                                            Reset
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        className="flex-1 items-center justify-center bg-accent-yellow rounded-[10px]"
+                                        style={{ padding: ms(14) }}
+                                        onPress={() => setShowFilterModal(false)}
+                                    >
+                                        <Text className="text-tactical-950" style={{ fontFamily: "Inter_600SemiBold", fontSize: ms(14) }}>
+                                            Apply
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </ScrollView>
+                        </View>
+                    </View>
+                </Modal>
             </View>
         </SafeAreaView>
     );

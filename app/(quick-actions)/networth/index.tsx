@@ -262,7 +262,7 @@ export default function Networth() {
                             {/* Category Header */}
                             <View
                                 className="flex-row justify-between items-center border-b border-tactical-800"
-                                style={{ padding: ms(14) }}
+                                style={{ padding: ms(16) }}
                             >
                                 <View className="flex-row items-center" style={{ gap: hs(8) }}>
                                     {(() => {
@@ -285,7 +285,7 @@ export default function Networth() {
                             </View>
 
                             {/* Items List */}
-                            <View className="bg-tactical-950 border border-tactical-800 rounded-[2px] m-4" style={{ padding: ms(14), gap: vs(10) }}>
+                            <View className="bg-tactical-950 rounded-[2px]" style={{ padding: ms(16), gap: vs(10) }}>
                                 {items.map((item) => (
                                     <View
                                         key={item.key}

@@ -4,11 +4,12 @@ import { TitleBar } from "@/src/components/ui/title-bar";
 import { supabase } from "@/src/services/supabase";
 import { formatNumber } from "@/src/services/torn-api";
 import { moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Linking, RefreshControl, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 15;
 
 interface ChainTarget {
     id: number;
@@ -55,6 +56,7 @@ function getStatusColor(status: string): string {
 }
 
 export default function ChainList() {
+    const router = useRouter();
     const [targets, setTargets] = useState<ChainTarget[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -71,7 +73,7 @@ export default function ChainList() {
 
     // Fetch stats counts separately from main list
     const fetchStats = async () => {
-        const { data, error } = await supabase
+        const { data } = await supabase
             .from('chain_target')
             .select('status');
 
@@ -103,12 +105,16 @@ export default function ChainList() {
                 query = query.in('status', ['Hospital', 'Jail']);
             }
 
-            // Apply sorting: Priority first (Okay=0, Hospital=1...), then Level desc
+            // Apply sorting: 
+            // 1. Okay first (status_priority ASC: 0=Okay, 1=Hospital, 2=Unknown)
+            // 2. Among Okay, newest checked first (last_checked_at DESC)
+            // 3. Then by level
             query = query
                 .order('status_priority', { ascending: true })
+                .order('last_checked_at', { ascending: false, nullsFirst: false })
                 .order('level', { ascending: false });
 
-            const { data, error } = await query;
+            const { data } = await query;
 
             if (data) {
                 if (shouldRefresh || pageNum === 0) {
@@ -133,7 +139,7 @@ export default function ChainList() {
         setHasMore(true);
         fetchItems(0, true);
         fetchStats();
-    }, [filter]); // Re-fetch when filter changes
+    }, [filter, fetchItems]); // Re-fetch when filter changes
 
     // Load more handler
     const loadMore = () => {
@@ -188,18 +194,28 @@ export default function ChainList() {
 
         return (
             <TouchableOpacity
-                onPress={() => Linking.openURL(`https://www.torn.com/loader2.php?sid=getInAttack&user2ID=${item.torn_id}`)}
+                onPress={() => {
+                    const attackUrl = `https://www.torn.com/loader2.php?sid=getInAttack&user2ID=${item.torn_id}`;
+                    router.push({
+                        pathname: '/(modals)/web-browser',
+                        params: {
+                            url: encodeURIComponent(attackUrl),
+                            title: `Attack ${item.name}`,
+                            mode: 'chain'
+                        }
+                    });
+                }}
                 activeOpacity={0.7}
                 style={{ marginBottom: vs(8) }}
             >
-                <Card style={{ padding: ms(12) }}>
+                <Card style={{ padding: ms(16) }}>
                     <View className="flex-row items-center justify-between">
                         {/* Left: Name and Level */}
                         <View style={{ flex: 1, gap: vs(4) }}>
                             <View className="flex-row items-center" style={{ gap: ms(8) }}>
                                 <Text
-                                    className="text-white"
-                                    style={{ fontFamily: 'Inter_700Bold', fontSize: ms(14) }}
+                                    className="text-white uppercase"
+                                    style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(16) }}
                                 >
                                     {item.name}
                                 </Text>
@@ -257,7 +273,7 @@ export default function ChainList() {
     const renderFooter = () => {
         if (!isLoadingMore) return null;
         return (
-            <View style={{ paddingVertical: vs(16), alignItems: 'center' }}>
+            <View style={{ padding: ms(16), alignItems: 'center' }}>
                 <ActivityIndicator color="#F59E0B" size="small" />
             </View>
         );
@@ -269,85 +285,90 @@ export default function ChainList() {
             <TitleBar title="Chain List" />
 
             {/* Stats Summary */}
-            <View className="flex-row justify-center" style={{ paddingHorizontal: ms(16), gap: ms(12), marginBottom: vs(12) }}>
-                <View className="bg-accent-green/20 rounded-lg px-4 py-2 items-center">
-                    <Text className="text-accent-green" style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: ms(18) }}>
-                        {stats.okay}
-                    </Text>
-                    <Text className="text-accent-green/70" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>
-                        OKAY
-                    </Text>
-                </View>
-                <View className="bg-accent-red/20 rounded-lg px-4 py-2 items-center">
-                    <Text className="text-accent-red" style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: ms(18) }}>
-                        {stats.hospital}
-                    </Text>
-                    <Text className="text-accent-red/70" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>
-                        HOSPITAL
-                    </Text>
-                </View>
-                <View className="bg-white/10 rounded-lg px-4 py-2 items-center">
-                    <Text className="text-white" style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: ms(18) }}>
-                        {stats.total}
-                    </Text>
-                    <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>
-                        TOTAL
-                    </Text>
-                </View>
-            </View>
-
-            {/* Filter Tabs */}
-            <View className="flex-row" style={{ paddingHorizontal: ms(16), marginBottom: vs(12), gap: ms(8) }}>
-                {(['all', 'okay', 'hospital'] as const).map((f) => (
-                    <TouchableOpacity
-                        key={f}
-                        onPress={() => setFilter(f)}
-                        className={`flex-1 rounded-lg py-2 items-center ${filter === f ? 'bg-white' : 'bg-tactical-800'}`}
-                    >
-                        <Text
-                            style={{
-                                fontFamily: 'Inter_600SemiBold',
-                                fontSize: ms(12),
-                                color: filter === f ? '#0A0A0A' : '#FFFFFF80',
-                                textTransform: 'capitalize'
-                            }}
-                        >
-                            {f === 'hospital' ? 'In Hospital' : f}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            {/* Target List with Server-Side Pagination */}
-            <FlatList
-                data={targets}
-                renderItem={renderTarget}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={{ paddingHorizontal: ms(16), paddingBottom: vs(32) }}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={isRefreshing}
-                        onRefresh={onRefresh}
-                        tintColor="#F59E0B"
-                    />
-                }
-                onEndReached={loadMore}
-                onEndReachedThreshold={0.5}
-                ListFooterComponent={renderFooter}
-                ListEmptyComponent={
-                    !isLoading ? (
-                        <View className="items-center justify-center py-8">
-                            <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(14) }}>
-                                No targets found
+            <View style={{ padding: ms(16), gap: vs(10) }}>
+                <Card>
+                    <Text className="text-white/50 uppercase border-b border-tactical-800" style={{ fontFamily: 'Inter_700Bold', fontSize: ms(18), padding: ms(16) }}>Stats Summary</Text>
+                    <View className="flex-row justify-between">
+                        <View className="flex-1 bg-accent-green/20 items-center" style={{ flexBasis: 0, padding: ms(16) }}>
+                            <Text className="text-accent-green" style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: ms(18) }}>
+                                {stats.okay}
+                            </Text>
+                            <Text className="text-accent-green/70" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>
+                                OKAY
                             </Text>
                         </View>
-                    ) : (
-                        <View className="items-center justify-center py-8">
-                            <ActivityIndicator color="#F59E0B" size="large" />
+                        <View className="flex-1 bg-accent-red/20 items-center" style={{ flexBasis: 0, padding: ms(16) }}>
+                            <Text className="text-accent-red" style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: ms(18) }}>
+                                {stats.hospital}
+                            </Text>
+                            <Text className="text-accent-red/70" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>
+                                HOSPITAL
+                            </Text>
                         </View>
-                    )
-                }
-            />
+                        <View className="flex-1 bg-white/10 items-center" style={{ flexBasis: 0, padding: ms(16) }}>
+                            <Text className="text-white" style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: ms(18) }}>
+                                {stats.total}
+                            </Text>
+                            <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>
+                                TOTAL
+                            </Text>
+                        </View>
+                    </View>
+                </Card>
+
+                {/* Filter Tabs */}
+                <View className="flex-row" style={{ gap: ms(10) }}>
+                    {(['all', 'okay', 'hospital'] as const).map((f) => (
+                        <TouchableOpacity
+                            key={f}
+                            onPress={() => setFilter(f)}
+                            className={`flex-1 rounded-lg items-center ${filter === f ? 'bg-accent-yellow' : 'bg-tactical-800'}`}
+                        >
+                            <Text
+                                style={{
+                                    padding: ms(10),
+                                    fontFamily: 'Inter_600SemiBold',
+                                    fontSize: ms(12),
+                                    color: filter === f ? '#0A0A0A' : '#FFFFFF80',
+                                    textTransform: 'capitalize'
+                                }}
+                            >
+                                {f === 'hospital' ? 'In Hospital' : f}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Target List with Server-Side Pagination */}
+                <FlatList
+                    data={targets}
+                    renderItem={renderTarget}
+                    keyExtractor={(item, index) => `${item.torn_id}-${index}`}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={isRefreshing}
+                            onRefresh={onRefresh}
+                            tintColor="#F59E0B"
+                        />
+                    }
+                    onEndReached={loadMore}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={renderFooter}
+                    ListEmptyComponent={
+                        !isLoading ? (
+                            <View className="items-center justify-center py-8">
+                                <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(14) }}>
+                                    No targets found
+                                </Text>
+                            </View>
+                        ) : (
+                            <View className="items-center justify-center py-8">
+                                <ActivityIndicator color="#F59E0B" size="large" />
+                            </View>
+                        )
+                    }
+                />
+            </View>
         </SafeAreaView>
     );
 }

@@ -10,6 +10,7 @@ export default function QuickActionsLayout() {
             <Stack.Screen name="property" />
             <Stack.Screen name="stats" />
             <Stack.Screen name="travel" />
+            <Stack.Screen name="widgets" />
             <Stack.Screen name="others" />
         </Stack>
     );

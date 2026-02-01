@@ -9,10 +9,10 @@
 
     android:resizeMode="horizontal|vertical"
 
-    android:description="@string/widget_statusoverview_description"
+    android:description="@string/widget_hello_description"
 
     android:initialLayout="@layout/rn_widget"
-    android:previewImage="@drawable/statusoverview_preview"
+    android:previewImage="@drawable/hello_preview"
 
 
 

@@ -190,6 +190,74 @@ export async function fetchBankRates(): Promise<TornBankRates | null> {
     }
 }
 
+/**
+ * Parse bank interest percentage from perk string.
+ * Examples: "+ 1% bank interest", "+ 2% bank interest"
+ * Returns the percentage as decimal (e.g., 0.01 for 1%)
+ */
+function parseBankInterestPerk(perk: string): number {
+    const match = perk.match(/\+\s*(\d+(?:\.\d+)?)\s*%\s*bank\s*interest/i);
+    if (match) {
+        return parseFloat(match[1]) / 100;
+    }
+    return 0;
+}
+
+/**
+ * Fetch all perks and calculate total bank interest modifier.
+ * Returns the total bonus percentage (e.g., 0.10 for 10% bonus)
+ */
+export async function fetchBankInterestModifier(): Promise<number> {
+    try {
+        const apiKey = await getApiKey();
+        if (!apiKey) return 0;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        trackApiRequest();
+        const response = await fetch(
+            `https://api.torn.com/user/?selections=perks&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return 0;
+        }
+
+        // Collect all perks arrays - bank interest bonus can come from merits and other sources
+        const allPerks: string[] = [
+            ...(data.faction_perks || []),
+            ...(data.job_perks || []),
+            ...(data.property_perks || []),
+            ...(data.education_perks || []),
+            ...(data.enhancer_perks || []),
+            ...(data.book_perks || []),
+            ...(data.stock_perks || []),
+            ...(data.merit_perks || []),
+        ];
+
+        // Parse bank interest percentages and sum them
+        // Bank interest bonuses are additive (sum of all bonuses)
+        let totalBonus = 0;
+        for (const perk of allPerks) {
+            const bankInterest = parseBankInterestPerk(perk);
+            if (bankInterest > 0) {
+                totalBonus += bankInterest;
+            }
+        }
+
+        return totalBonus;
+    } catch (error) {
+        console.error("Failed to fetch bank interest modifier:", error);
+        return 0;
+    }
+}
+
 // City Bank investment details (from V1 API)
 export interface TornCityBankDetails {
     amount: number;
@@ -1286,7 +1354,7 @@ export async function fetchGymModifier(): Promise<number> {
 
         trackApiRequest();
         const response = await fetch(
-            `https://api.torn.com/user/?selections=&key=${apiKey}`,
+            `https://api.torn.com/user/?selections=perks&key=${apiKey}`,
             { signal: controller.signal, cache: 'no-store' }
         );
         clearTimeout(timeoutId);

@@ -31,6 +31,13 @@
         <data android:scheme="exp+mobile-torn-sentinel"/>
       </intent-filter>
     </activity>
+    <receiver android:name=".widget.Hello" android:exported="false" android:label="Hello">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+        <action android:name="com.kaozi.tornsentinel.WIDGET_CLICK"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widgetprovider_hello"/>
+    </receiver>
     <receiver android:name=".widget.StatusOverview" android:exported="false" android:label="Status Overview">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>

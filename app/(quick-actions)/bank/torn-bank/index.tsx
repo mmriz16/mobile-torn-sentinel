@@ -3,7 +3,7 @@ import { Card } from "@/src/components/ui/card";
 import { GridPattern } from "@/src/components/ui/grid-pattern";
 import { ProgressBar } from "@/src/components/ui/progress-bar";
 import { TitleBar } from "@/src/components/ui/title-bar";
-import { fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBankDetails, TornNetworth, TornUserData } from "@/src/services/torn-api";
+import { fetchBankInterestModifier, fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBankDetails, TornNetworth, TornUserData } from "@/src/services/torn-api";
 import { moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive";
 import { Bell } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
@@ -27,6 +27,7 @@ export default function TornBank() {
     const [networth, setNetworth] = useState<TornNetworth | null>(null);
     const [cityBankDetails, setCityBankDetails] = useState<TornCityBankDetails | null>(null);
     const [bankRates, setBankRates] = useState<TornBankRates | null>(null);
+    const [bankInterestBonus, setBankInterestBonus] = useState<number>(0);
     const [isLoading, setIsLoading] = useState(true);
     const [countdown, setCountdown] = useState<number>(0);
     const [investAmount, setInvestAmount] = useState<string>('');
@@ -38,15 +39,17 @@ export default function TornBank() {
         if (isInitialLoad.current) {
             setIsLoading(true);
         }
-        const [{ userData: userDataResult, networth: networthData }, cityBank, rates] = await Promise.all([
+        const [{ userData: userDataResult, networth: networthData }, cityBank, rates, interestBonus] = await Promise.all([
             fetchUserDataWithNetworth(),
             fetchCityBankDetails(),
-            fetchBankRates()
+            fetchBankRates(),
+            fetchBankInterestModifier()
         ]);
         setUserData(userDataResult);
         setNetworth(networthData);
         setCityBankDetails(cityBank);
         setBankRates(rates);
+        setBankInterestBonus(interestBonus);
         if (cityBank?.time_left) {
             setCountdown(cityBank.time_left);
         }
@@ -104,11 +107,13 @@ export default function TornBank() {
         return Number(cleaned) || 0;
     };
 
-    // Get current APR rate for selected tenor
+    // Get current APR rate for selected tenor (includes merit bonus)
     const getCurrentRate = (): number => {
         if (!bankRates) return 0;
         const tenorKey = TENORS[tenorStep].key;
-        return bankRates[tenorKey] || 0;
+        const baseRate = bankRates[tenorKey] || 0;
+        // Add merit bonus (bankInterestBonus is already in decimal, convert to percentage)
+        return baseRate + (bankInterestBonus * 100);
     };
 
     // Calculate projected return based on invest amount and selected tenor rate
@@ -348,7 +353,7 @@ export default function TornBank() {
                                             className={index === tenorStep ? "text-accent-green" : "text-white/30"}
                                             style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}
                                         >
-                                            +{bankRates ? bankRates[tenor.key]?.toFixed(2) : '0.00'}%
+                                            +{bankRates ? ((bankRates[tenor.key] || 0) + (bankInterestBonus * 100)).toFixed(2) : '0.00'}%
                                         </Text>
                                     </TouchableOpacity>
                                 ))}

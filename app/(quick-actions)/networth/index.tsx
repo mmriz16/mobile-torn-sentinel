@@ -122,12 +122,14 @@ export default function Networth() {
     // Hybrid approach: Use real-time money data for liquid assets
     // Map real-time money fields to networth keys
     // Use Number() to ensure proper number conversion and || 0 to handle null/undefined/NaN
+    // Note: For points, we use networthData?.points because it contains the dollar VALUE (quantity × price per point)
+    // whereas moneyData?.points only contains the QUANTITY of points (not the dollar value)
     const realTimeLiquid: Record<string, number> = {
         wallet: Number(moneyData?.wallet) || Number(networthData?.wallet) || 0,
         vaults: Number(moneyData?.vault) || Number(networthData?.vaults) || 0,
         bank: Number(moneyData?.city_bank) || Number(networthData?.bank) || 0,
         overseas_bank: Number(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0,
-        points: Number(moneyData?.points) || Number(networthData?.points) || 0,
+        points: Number(networthData?.points) || 0, // Always use networth value - it's already the dollar value
     };
 
     // Calculate hybrid total: replace liquid assets in cached total with real-time values

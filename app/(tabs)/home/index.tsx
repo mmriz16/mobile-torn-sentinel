@@ -253,7 +253,8 @@ export default function Home() {
 
         // Save daily bank snapshot for "VS Yesterday" comparison (runs in background)
         saveBankDailySnapshot(data, nw);
-    }, [saveBankDailySnapshot]);
+
+    }, [saveBankDailySnapshot, weeklyXanax]);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);

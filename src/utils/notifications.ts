@@ -1,4 +1,4 @@
-import * as Notifications from 'expo-notifications';
+import notifee, { AndroidImportance, TriggerType } from '@notifee/react-native';
 import { Platform } from 'react-native';
 
 // Definisi Tipe Data yang kompatibel dengan TornUserData dari torn-api.ts
@@ -24,66 +24,56 @@ interface TornData {
 // Channel ID untuk notifikasi - harus sama dengan yang dikirim dari server
 export const NOTIFICATION_CHANNEL_ID = 'torn-sentinel-alerts';
 
-// Konfigurasi Notifikasi (Foreground) - Only set on native platforms
-if (Platform.OS !== 'web') {
-    Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-            shouldShowAlert: true,
-            shouldPlaySound: true,
-            shouldSetBadge: false,
-            shouldShowBanner: true,
-            shouldShowList: true,
-        }),
-    });
-}
-
-// Setup Android Notification Channel dengan importance MAX untuk heads-up popup
+// --- Helper: Setup Notifee Channel ---
 export async function setupNotificationChannel() {
     if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL_ID, {
+        await notifee.createChannel({
+            id: NOTIFICATION_CHANNEL_ID,
             name: 'Torn Sentinel Alerts',
-            importance: Notifications.AndroidImportance.MAX, // MAX = heads-up popup
-            vibrationPattern: [0, 250, 250, 250],
+            importance: AndroidImportance.HIGH, // HIGH = heads-up popup
+            vibration: true,
             lightColor: '#FF0000',
             sound: 'default',
-            enableVibrate: true,
-            enableLights: true,
-            showBadge: true,
-            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         });
-        console.log('✅ Android notification channel created with MAX importance');
+        console.log('✅ Android notification channel created (Notifee)');
     }
 }
 
-// Helper: Jadwalkan Notifikasi
+// Helper: Jadwalkan Notifikasi dengan Notifee
 async function scheduleItem(title: string, body: string, triggerSeconds: number, iconName: string = 'ic_launcher') {
     if (triggerSeconds > 1) { // Hanya jadwalkan jika waktu > 1 detik
-        await Notifications.scheduleNotificationAsync({
-            content: {
-                title,
-                body,
-                sound: 'default',
-                // @ts-ignore - icon property works on Android but may not be typed in all Expo versions
-                icon: iconName
-            },
-            trigger: {
-                seconds: triggerSeconds,
-                type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL // Memastikan tipe trigger benar
-            },
-        });
+        try {
+            await notifee.createTriggerNotification(
+                {
+                    title,
+                    body,
+                    android: {
+                        channelId: NOTIFICATION_CHANNEL_ID,
+                        smallIcon: iconName, // Custom ICON support!
+                        color: '#FCF3EC', // Branding color
+                        pressAction: {
+                            id: 'default',
+                        },
+                    },
+                },
+                {
+                    type: TriggerType.TIMESTAMP,
+                    timestamp: Date.now() + (triggerSeconds * 1000), // Convert seconds to future milliseconds
+                }
+            );
+        } catch (e) {
+            console.warn(`Failed to schedule notification "${title}":`, e);
+        }
     }
 }
 
 // --- FUNGSI UTAMA ---
 export async function scheduleAllNotifications(data: TornData) {
-    // Skip on web - expo-notifications scheduling is not supported
-    if (Platform.OS === 'web') {
-        console.log('⚠️ Notifications not supported on web platform');
-        return;
-    }
+    // Notifee supports both Android and iOS roughly the same way for triggers
+    // but icons are Android specific.
 
     // 1. Bersihkan jadwal lama agar tidak duplikat
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await notifee.cancelAllNotifications();
 
     const now = Math.floor(Date.now() / 1000); // Waktu sekarang (detik)
 
@@ -209,5 +199,5 @@ export async function scheduleAllNotifications(data: TornData) {
         }
     }
 
-    console.log(`✅ ${new Date().toLocaleTimeString()}: All notifications scheduled.`);
+    console.log(`✅ ${new Date().toLocaleTimeString()}: All notifications scheduled (Notifee).`);
 }

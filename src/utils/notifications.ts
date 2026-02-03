@@ -131,23 +131,13 @@ export async function scheduleAllNotifications(data: TornData) {
         }
     }
 
-    // 😄 Happy - Only schedule if happy is NOT full AND not on cooldown/incapacitated
-    const happyCurrent = data.bars?.happy?.current ?? 0;
-    const happyMax = data.bars?.happy?.maximum ?? 0;
-    const isHospitalized = data.profile?.status?.state === "Hospital";
-    const isJailed = data.profile?.status?.state === "Jail";
-    const hasDrugCooldown = (data.cooldowns?.drug ?? 0) > 0;
-
-    // Don't notify about happy ticker if user can't train/jump anyway
-    if (happyCurrent < happyMax && happyMax > 0 && !hasDrugCooldown && !isHospitalized && !isJailed) {
-        // Happy reset setiap :00, :15, :30, :45. Kita hitung detik menuju kelipatan 15 menit terdekat.
-        const date = new Date();
-        const minutes = date.getMinutes();
-        const seconds = date.getSeconds();
-        let nextTickSeconds = ((15 - (minutes % 15)) * 60) - seconds;
-        if (nextTickSeconds <= 0) nextTickSeconds += 900; // Koreksi jika negatif
-
-        await scheduleItem("😄 Happy Reset", "Happy ticker updated. You are clear to train or use items!", nextTickSeconds, "ic_notif_happy");
+    // 😄 Happy - Notify ONLY when full (as requested)
+    const happyFullTime = data.bars?.happy?.full_time ?? 0;
+    if (happyFullTime > 0) {
+        const secondsLeft = happyFullTime - now;
+        if (secondsLeft > 0) {
+            await scheduleItem("😄 Happy Full", "Your happy is maxed out! Time to train or use items!", secondsLeft, "ic_notif_happy");
+        }
     }
 
     // --- C. COOLDOWNS ---

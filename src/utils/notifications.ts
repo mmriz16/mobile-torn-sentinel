@@ -56,10 +56,16 @@ export async function setupNotificationChannel() {
 }
 
 // Helper: Jadwalkan Notifikasi
-async function scheduleItem(title: string, body: string, triggerSeconds: number) {
+async function scheduleItem(title: string, body: string, triggerSeconds: number, iconName: string = 'ic_launcher') {
     if (triggerSeconds > 1) { // Hanya jadwalkan jika waktu > 1 detik
         await Notifications.scheduleNotificationAsync({
-            content: { title, body, sound: 'default' },
+            content: {
+                title,
+                body,
+                sound: 'default',
+                // @ts-ignore - icon property works on Android but may not be typed in all Expo versions
+                icon: iconName
+            },
             trigger: {
                 seconds: triggerSeconds,
                 type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL // Memastikan tipe trigger benar
@@ -91,7 +97,8 @@ export async function scheduleAllNotifications(data: TornData) {
             await scheduleItem(
                 "✈️ 2 Minutes to Landing!",
                 `Prepare to land in ${data.travel.destination}.`,
-                timeLeft - 120
+                timeLeft - 120,
+                "ic_notif_plane"
             );
         }
 
@@ -99,7 +106,8 @@ export async function scheduleAllNotifications(data: TornData) {
         await scheduleItem(
             "🛬 Arrived!",
             `You just landed ${data.travel.destination}! grab your items, check prices, and plan your next flight before you waste time. `,
-            timeLeft
+            timeLeft,
+            "ic_notif_plane"
         );
     }
 
@@ -111,7 +119,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (energyFullTime > 0) {
         const secondsLeft = energyFullTime - now;
         if (secondsLeft > 0) {
-            await scheduleItem("⚡ Energy Full", "Your energy is capped right now—go train, hit, or do something before the regen gets wasted.", secondsLeft);
+            await scheduleItem("⚡ Energy Full", "Your energy is capped right now—go train, hit, or do something before the regen gets wasted.", secondsLeft, "ic_notif_energy");
         }
     }
 
@@ -120,7 +128,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (nerveFullTime > 0) {
         const secondsLeft = nerveFullTime - now;
         if (secondsLeft > 0) {
-            await scheduleItem("🧠 Nerve Full", "Nerve is maxed out—perfect time to run a bunch of crimes and cash in the regen.", secondsLeft);
+            await scheduleItem("🧠 Nerve Full", "Nerve is maxed out—perfect time to run a bunch of crimes and cash in the regen.", secondsLeft, "ic_notif_nerve");
         }
     }
 
@@ -129,7 +137,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (lifeFullTime > 0) {
         const secondsLeft = lifeFullTime - now;
         if (secondsLeft > 0) {
-            await scheduleItem("❤️ Life Full", "You're back at full health—no need to play it safe anymore, you're good to go.", secondsLeft);
+            await scheduleItem("❤️ Life Full", "You're back at full health—no need to play it safe anymore, you're good to go.", secondsLeft, "ic_notif_heart");
         }
     }
 
@@ -149,7 +157,7 @@ export async function scheduleAllNotifications(data: TornData) {
         let nextTickSeconds = ((15 - (minutes % 15)) * 60) - seconds;
         if (nextTickSeconds <= 0) nextTickSeconds += 900; // Koreksi jika negatif
 
-        await scheduleItem("😄 Happy Reset", "Happy ticker updated. You are clear to train or use items!", nextTickSeconds);
+        await scheduleItem("😄 Happy Reset", "Happy ticker updated. You are clear to train or use items!", nextTickSeconds, "ic_notif_happy");
     }
 
     // --- C. COOLDOWNS ---
@@ -157,20 +165,20 @@ export async function scheduleAllNotifications(data: TornData) {
     // 💊 Drug
     const drugCooldown = data.cooldowns?.drug ?? 0;
     if (drugCooldown > 0) {
-        await scheduleItem("💊 Drug Ready", "Drug cooldown is finally over—your next dose is available whenever you're ready.", drugCooldown);
+        await scheduleItem("💊 Drug Ready", "Drug cooldown is finally over—your next dose is available whenever you're ready.", drugCooldown, "ic_notif_drug");
     }
 
     // 🍬 Booster
     const boosterCooldown = data.cooldowns?.booster ?? 0;
     if (boosterCooldown > 0) {
-        await scheduleItem("🍬 Booster Ready", "Booster cooldown is done—if you're stacking or preparing for war, you can use one again.", boosterCooldown);
+        await scheduleItem("🍬 Booster Ready", "Booster cooldown is done—if you're stacking or preparing for war, you can use one again.", boosterCooldown, "ic_notif_booster");
     }
 
     // 🏥 Hospital - Ambil dari profile.status jika state = "Hospital"
     if (data.profile?.status?.state === "Hospital" && data.profile.status.until) {
         const secondsLeft = data.profile.status.until - now;
         if (secondsLeft > 0) {
-            await scheduleItem("🏥 Out of Hospital", "You're out of the hospital—get back to your routine, or jump straight back into the action.", secondsLeft);
+            await scheduleItem("🏥 Out of Hospital", "You're out of the hospital—get back to your routine, or jump straight back into the action.", secondsLeft, "ic_notif_hospital");
         }
     }
 
@@ -178,7 +186,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (data.profile?.status?.state === "Jail" && data.profile.status.until) {
         const secondsLeft = data.profile.status.until - now;
         if (secondsLeft > 0) {
-            await scheduleItem("⚖️ Free from Jail", "You're free again—go handle your stuff, and maybe keep a low profile for a bit.", secondsLeft);
+            await scheduleItem("⚖️ Free from Jail", "You're free again—go handle your stuff, and maybe keep a low profile for a bit.", secondsLeft, "ic_notif_jail");
         }
     }
 
@@ -187,7 +195,7 @@ export async function scheduleAllNotifications(data: TornData) {
     if (educationUntil > 0) {
         const secondsLeft = educationUntil - now;
         if (secondsLeft > 0) {
-            await scheduleItem("🎓 Education Complete", "Your education course just finished—enroll in the next one so you keep progressing nonstop.", secondsLeft);
+            await scheduleItem("🎓 Education Complete", "Your education course just finished—enroll in the next one so you keep progressing nonstop.", secondsLeft, "ic_notif_book");
         }
     }
 
@@ -197,7 +205,7 @@ export async function scheduleAllNotifications(data: TornData) {
         // Ingatkan 90 detik sebelum putus
         const warningTime = chainTimeout - 90;
         if (warningTime > 0) {
-            await scheduleItem("🔗 Chain Warning!", "Chain breaks in 90s!", warningTime);
+            await scheduleItem("🔗 Chain Warning!", "Chain breaks in 90s!", warningTime, "ic_notif_chain");
         }
     }
 

@@ -93,6 +93,141 @@ export default function Changelog({ onClose }: ChangelogProps) {
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={{ gap: ms(16), paddingBottom: ms(20) }}
                         >
+
+                            {/* VERSION 1.1.9 - Newest */}
+                            <Card className="border border-tactical-800" style={{ borderRadius: ms(8) }}>
+                                <View className="flex-row justify-between items-center bg-tactical-950 border-b border-tactical-800" style={{ padding: ms(16) }}>
+                                    <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14) }}>Version 1.1.9</Text>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>Feb, 3 2026</Text>
+                                </View>
+                                <View className="bg-tactical-950" style={{ gap: ms(6), padding: ms(16) }}>
+                                    <View className="flex-row items-center" style={{ gap: ms(4) }}>
+                                        <View className="bg-accent-green rounded-full" style={{ width: ms(4), height: ms(4) }} />
+                                        <Text className="text-white/80 uppercase" style={{ fontFamily: 'Inter_700Bold', fontSize: ms(12) }}>Improvements & Changes</Text>
+                                    </View>
+                                    <View style={{ paddingLeft: ms(3) }}>
+                                        <View className="border-l border-tactical-800" style={{ paddingVertical: ms(4), paddingLeft: ms(8) }}>
+                                            <View className="bg-tactical-900 border border-tactical-800" style={{ padding: ms(10), gap: ms(4) }}>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Added Notifee for local notifications</Text>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Updated Android build configuration</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </Card>
+
+
+                            {/* VERSION 1.1.10 - Newest */}
+                            <Card className="border border-tactical-800" style={{ borderRadius: ms(8) }}>
+                                <View className="flex-row justify-between items-center bg-tactical-950 border-b border-tactical-800" style={{ padding: ms(16) }}>
+                                    <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14) }}>Version 1.1.10</Text>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>Feb, 3 2026</Text>
+                                </View>
+                                <View className="bg-tactical-950" style={{ gap: ms(6), padding: ms(16) }}>
+                                    <View className="flex-row items-center" style={{ gap: ms(4) }}>
+                                        <View className="bg-accent-green rounded-full" style={{ width: ms(4), height: ms(4) }} />
+                                        <Text className="text-white/80 uppercase" style={{ fontFamily: 'Inter_700Bold', fontSize: ms(12) }}>Improvements & Changes</Text>
+                                    </View>
+                                    <View style={{ paddingLeft: ms(3) }}>
+                                        <View className="border-l border-tactical-800" style={{ paddingVertical: ms(4), paddingLeft: ms(8) }}>
+                                            <View className="bg-tactical-900 border border-tactical-800" style={{ padding: ms(10), gap: ms(4) }}>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Fixed Android SDK version configuration</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </Card>
+
+                            {/* VERSION 1.1.12 - Newest */}
+                            <Card className="border border-tactical-800" style={{ borderRadius: ms(8) }}>
+                                <View className="flex-row justify-between items-center bg-tactical-950 border-b border-tactical-800" style={{ padding: ms(16) }}>
+                                    <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14) }}>Version 1.1.12</Text>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>Feb, 3 2026</Text>
+                                </View>
+                                <View className="bg-tactical-950" style={{ gap: ms(6), padding: ms(16) }}>
+                                    <View className="flex-row items-center" style={{ gap: ms(4) }}>
+                                        <View className="bg-accent-green rounded-full" style={{ width: ms(4), height: ms(4) }} />
+                                        <Text className="text-white/80 uppercase" style={{ fontFamily: 'Inter_700Bold', fontSize: ms(12) }}>Improvements & Changes</Text>
+                                    </View>
+                                    <View style={{ paddingLeft: ms(3) }}>
+                                        <View className="border-l border-tactical-800" style={{ paddingVertical: ms(4), paddingLeft: ms(8) }}>
+                                            <View className="bg-tactical-900 border border-tactical-800" style={{ padding: ms(10), gap: ms(4) }}>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Added dynamic travel notification icons</Text>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Added dynamic status color (Yellow/Green)</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </Card>
+
+                            {/* VERSION 1.1.11 - Newest */}
+                            <Card className="border border-tactical-800" style={{ borderRadius: ms(8) }}>
+                                <View className="flex-row justify-between items-center bg-tactical-950 border-b border-tactical-800" style={{ padding: ms(16) }}>
+                                    <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14) }}>Version 1.1.11</Text>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>Feb, 3 2026</Text>
+                                </View>
+                                <View className="bg-tactical-950" style={{ gap: ms(6), padding: ms(16) }}>
+                                    <View className="flex-row items-center" style={{ gap: ms(4) }}>
+                                        <View className="bg-accent-green rounded-full" style={{ width: ms(4), height: ms(4) }} />
+                                        <Text className="text-white/80 uppercase" style={{ fontFamily: 'Inter_700Bold', fontSize: ms(12) }}>Improvements & Changes</Text>
+                                    </View>
+                                    <View style={{ paddingLeft: ms(3) }}>
+                                        <View className="border-l border-tactical-800" style={{ paddingVertical: ms(4), paddingLeft: ms(8) }}>
+                                            <View className="bg-tactical-900 border border-tactical-800" style={{ padding: ms(10), gap: ms(4) }}>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Added Travel Foreground Service Notification</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </Card>
+
+                            
+                            {/* VERSION 1.1.13 - Newest */}
+                            <Card className="border border-tactical-800" style={{ borderRadius: ms(8) }}>
+                                <View className="flex-row justify-between items-center bg-tactical-950 border-b border-tactical-800" style={{ padding: ms(16) }}>
+                                    <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14) }}>Version 1.1.13</Text>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>Feb, 3 2026</Text>
+                                </View>
+                                <View className="bg-tactical-950" style={{ gap: ms(6), padding: ms(16) }}>
+                                    <View className="flex-row items-center" style={{ gap: ms(4) }}>
+                                        <View className="bg-accent-green rounded-full" style={{ width: ms(4), height: ms(4) }} />
+                                        <Text className="text-white/80 uppercase" style={{ fontFamily: 'Inter_700Bold', fontSize: ms(12) }}>Improvements & Changes</Text>
+                                    </View>
+                                    <View style={{ paddingLeft: ms(3) }}>
+                                        <View className="border-l border-tactical-800" style={{ paddingVertical: ms(4), paddingLeft: ms(8) }}>
+                                            <View className="bg-tactical-900 border border-tactical-800" style={{ padding: ms(10), gap: ms(4) }}>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Added 11 custom notification icons</Text>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Updated notification theme color to #FCF3EC</Text>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Made travel notification persistent (ongoing)</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </Card>
+
+                            
+                            {/* VERSION 1.1.14 - Newest */}
+                            <Card className="border border-tactical-800" style={{ borderRadius: ms(8) }}>
+                                <View className="flex-row justify-between items-center bg-tactical-950 border-b border-tactical-800" style={{ padding: ms(16) }}>
+                                    <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_800ExtraBold', fontSize: ms(14) }}>Version 1.1.14</Text>
+                                    <Text className="text-white/70 uppercase" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>Feb, 3 2026</Text>
+                                </View>
+                                <View className="bg-tactical-950" style={{ gap: ms(6), padding: ms(16) }}>
+                                    <View className="flex-row items-center" style={{ gap: ms(4) }}>
+                                        <View className="bg-accent-green rounded-full" style={{ width: ms(4), height: ms(4) }} />
+                                        <Text className="text-white/80 uppercase" style={{ fontFamily: 'Inter_700Bold', fontSize: ms(12) }}>Improvements & Changes</Text>
+                                    </View>
+                                    <View style={{ paddingLeft: ms(3) }}>
+                                        <View className="border-l border-tactical-800" style={{ paddingVertical: ms(4), paddingLeft: ms(8) }}>
+                                            <View className="bg-tactical-900 border border-tactical-800" style={{ padding: ms(10), gap: ms(4) }}>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Fixed Custom Notification Icons (Plugin Configuration)</Text>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Verified Native Asset Injection</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </Card>
+
                             {changelogs.map((log, index) => (
                                 <Card key={log.id} className="border border-tactical-800" style={{ borderRadius: ms(8), opacity: index > 0 ? 0.7 : 1 }}>
                                     <View className="flex-row justify-between items-center bg-tactical-950 border-b border-tactical-800" style={{ padding: ms(16) }}>

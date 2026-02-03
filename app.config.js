@@ -1,13 +1,16 @@
-import 'dotenv/config';
+require('dotenv/config');
+
+const withNotificationIcons = require('./plugins/withNotificationIcons');
 
 // Determine if this is a development build
 const IS_DEV = process.env.APP_VARIANT === 'development';
 
-export default {
-    expo: {
-        name: IS_DEV ? "Torn Sentinel Dev" : "Torn Sentinel",
+module.exports = ({ config }) => {
+    const finalConfig = {
+        ...config,
+        name: IS_DEV ? "Torn Sentinel Dev" : "Torn Sentinel Prod",
         slug: "mobile-torn-sentinel",
-        version: "1.1.0",
+        version: "1.1.14",
         orientation: "portrait",
         icon: "./assets/images/icon.png",
         scheme: "mobiletornsentinel",
@@ -38,8 +41,25 @@ export default {
             favicon: "./assets/images/favicon.png"
         },
 
+        notification: {
+            // color: "#FCF3EC" // Set default color
+            // icon: "./assets/images/notification-icon.png" // We use custom icons now
+            color: "#FCF3EC"
+        },
+
         plugins: [
             "expo-router",
+            // "./plugins/withNotificationIcons", // Removed string usage to avoid resolution issues, applied manually below
+            [
+                "expo-build-properties",
+                {
+                    "android": {
+                        "compileSdkVersion": 36,
+                        "targetSdkVersion": 36,
+                        "buildToolsVersion": "36.0.0"
+                    }
+                }
+            ],
             [
                 "expo-splash-screen",
                 {
@@ -100,7 +120,8 @@ export default {
                         },
                     ],
                 }
-            ]
+            ],
+            "expo-asset"
         ],
 
         experiments: {
@@ -122,5 +143,8 @@ export default {
             url: "https://u.expo.dev/b2459cf2-1337-4d3b-b32b-4ef86da1b8cf"
         },
         runtimeVersion: "1.0.0",
-    }
+    };
+
+    // Apply custom plugin programmatically
+    return withNotificationIcons(finalConfig);
 };

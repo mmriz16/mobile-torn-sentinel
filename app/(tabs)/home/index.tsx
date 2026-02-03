@@ -44,6 +44,7 @@ import QaOthers from '@/assets/icons/qa-others.svg';
 import { BatteryCharging, Bell, Brain, Cannabis, Coins, Columns4, Cross, Heart, Landmark, Link, Smile, TrendingUp, TriangleAlert, X, Zap } from 'lucide-react-native';
 
 import Changelog from '@/app/(modals)/changelog';
+import TravelNotificationService from '@/src/services/TravelNotificationService';
 
 // --- Animated Components Removed ---
 
@@ -88,7 +89,7 @@ export default function Home() {
     const [showChangelog, setShowChangelog] = useState(false);
 
     // Current app version - update this when releasing new versions
-    const APP_VERSION = "1.1.8";
+    const APP_VERSION = "1.1.14";
 
     // Check if changelog should be shown (once per version)
     useEffect(() => {
@@ -106,7 +107,18 @@ export default function Home() {
             }
         };
         checkChangelogVersion();
+        checkChangelogVersion();
     }, []);
+
+    // Travel Notification Service Integration
+    useEffect(() => {
+        if (userData?.travel) {
+            TravelNotificationService.updateTravelData(userData.travel);
+        } else {
+            // Stop service if travel data is missing or user is not traveling
+            TravelNotificationService.stopService();
+        }
+    }, [userData?.travel]);
 
     useEffect(() => {
         loadShortcuts();

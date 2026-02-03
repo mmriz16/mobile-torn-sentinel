@@ -10,7 +10,7 @@ module.exports = ({ config }) => {
         ...config,
         name: IS_DEV ? "Torn Sentinel Dev" : "Torn Sentinel Prod",
         slug: "mobile-torn-sentinel",
-        version: "1.1.16",
+        version: "1.1.17",
         orientation: "portrait",
         icon: "./assets/images/icon.png",
         scheme: "mobiletornsentinel",

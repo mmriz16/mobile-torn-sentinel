@@ -108,7 +108,7 @@ class TravelNotificationService {
                 channelId: CHANNEL_ID,
                 asForegroundService: true,
                 ongoing: true, // Make notification non-dismissible
-                color: '#FBB32C', // Fixed Accent Color (Orange)
+                color: '#FCF3EC', // User requested notification color
                 onlyAlertOnce: true, // Don't buzz on every update
                 progress: {
                     max: totalDuration,

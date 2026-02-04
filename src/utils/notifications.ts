@@ -22,7 +22,7 @@ interface TornData {
 }
 
 // Channel ID untuk notifikasi - harus sama dengan yang dikirim dari server
-export const NOTIFICATION_CHANNEL_ID = 'torn-sentinel-alerts';
+export const NOTIFICATION_CHANNEL_ID = 'torn-sentinel-alerts-v2';
 
 // --- Helper: Setup Notifee Channel ---
 export async function setupNotificationChannel() {

@@ -6,9 +6,16 @@ import { moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive
 import { useLocalSearchParams } from "expo-router";
 import { ChevronRight } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { Platform, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
+
+// Google blocks sign-in from embedded WebViews with default user agents.
+// Using a real browser user agent bypasses this restriction.
+const CHROME_USER_AGENT =
+    Platform.OS === 'android'
+        ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36'
+        : 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
 
 interface OkayTarget {
     torn_id: number;
@@ -31,7 +38,7 @@ export default function WebBrowserModal() {
 
 
     const webViewRef = useRef<WebView>(null);
-    const [isLoading, setIsLoading] = useState(true);
+
     const [okayTargets, setOkayTargets] = useState<OkayTarget[]>([]);
 
     // Chain Status
@@ -142,7 +149,7 @@ export default function WebBrowserModal() {
             setCurrentUrl(attackUrl);
             setCurrentTitle(`Attack ${nextTarget.name}`);
             setCurrentIdx(nextIdx);
-            setIsLoading(true);
+
         }
     };
 
@@ -187,25 +194,63 @@ export default function WebBrowserModal() {
             )}
 
             <View className="flex-1">
-                {isLoading && (
-                    <View className="absolute inset-0 items-center justify-center z-10 bg-tactical-950">
-                        <ActivityIndicator size="large" color="#F59E0B" />
-                    </View>
-                )}
-
                 {currentUrl ? (
                     <WebView
                         ref={webViewRef}
                         source={{ uri: currentUrl }}
                         style={{ flex: 1, backgroundColor: '#0C0A09' }}
-                        onLoadStart={() => setIsLoading(true)}
-                        onLoadEnd={() => setIsLoading(false)}
                         javaScriptEnabled={true}
                         domStorageEnabled={true}
-                        startInLoadingState={true}
                         scalesPageToFit={true}
                         allowsInlineMediaPlayback={true}
                         mediaPlaybackRequiresUserAction={false}
+                        // Google OAuth fix: use real browser user agent
+                        userAgent={CHROME_USER_AGENT}
+                        // Enable cookies for authentication
+                        thirdPartyCookiesEnabled={true}
+                        sharedCookiesEnabled={true}
+                        // Allow all URL schemes (needed for OAuth redirects)
+                        originWhitelist={['*']}
+                        mixedContentMode="compatibility"
+                        cacheEnabled={true}
+                        setSupportMultipleWindows={false}
+                        // Intercept window.close() — Google OAuth popup calls this after login,
+                        // which blanks the WebView. We override it to send a message instead.
+                        injectedJavaScript={`
+                            window.close = function() {
+                                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'windowClose' }));
+                            };
+                            true;
+                        `}
+                        // When Google OAuth popup calls window.close(), reload the original page
+                        onMessage={(event) => {
+                            try {
+                                const data = JSON.parse(event.nativeEvent.data);
+                                if (data.type === 'windowClose') {
+                                    webViewRef.current?.injectJavaScript(
+                                        `window.location.href = '${currentUrl.replace(/'/g, "\\'")}'; true;`
+                                    );
+                                }
+                            } catch { }
+                        }}
+                        // Fallback: if page navigates to about:blank, reload original URL
+                        onNavigationStateChange={(navState) => {
+                            if (navState.url === 'about:blank' && currentUrl) {
+                                setTimeout(() => {
+                                    webViewRef.current?.injectJavaScript(
+                                        `window.location.href = '${currentUrl.replace(/'/g, "\\'")}'; true;`
+                                    );
+                                }, 300);
+                            }
+                        }}
+                        onShouldStartLoadWithRequest={(request) => {
+                            const { url: reqUrl } = request;
+                            if (reqUrl.startsWith('http://') || reqUrl.startsWith('https://')) {
+                                return true;
+                            }
+                            if (reqUrl === 'about:blank') return true;
+                            return false;
+                        }}
                     />
                 ) : null}
             </View>

@@ -174,7 +174,7 @@ export default function Home() {
         // Calculate current values
         const moneyData = user.money;
         const networthData = nw?.personalstats?.networth;
-        const currentWallet = Number(moneyData?.wallet) || Number(networthData?.wallet) || 0;
+        const currentWallet = Number(networthData?.wallet) || Number(moneyData?.wallet) || 0;
         const currentStocks = Number(networthData?.stock_market) || 0;
 
         try {
@@ -477,11 +477,21 @@ export default function Home() {
     const networthData = networth?.personalstats?.networth;
     const moneyData = userData?.money;
 
+    const getMoneyValue = (val: any) => {
+        if (!val) return 0;
+        if (typeof val === 'object') {
+            if ('amount' in val) return val.amount;
+            if ('money' in val) return val.money;
+        }
+        return Number(val) || 0;
+    };
+
     const realTimeLiquid: Record<string, number> = {
-        wallet: Number(moneyData?.wallet) || Number(networthData?.wallet) || 0,
-        vaults: Number(moneyData?.vault) || Number(networthData?.vaults) || 0,
-        bank: Number(moneyData?.city_bank) || Number(networthData?.bank) || 0,
-        overseas_bank: Number(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0,
+        wallet: Number(networthData?.wallet) || Number(moneyData?.wallet) || 0,
+        vaults: getMoneyValue(moneyData?.vault) || Number(networthData?.vaults) || 0,
+        bank: getMoneyValue(moneyData?.city_bank) || Number(networthData?.bank) || 0,
+        overseas_bank: getMoneyValue(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0,
+        faction: getMoneyValue(moneyData?.faction) || 0,
         points: Number(moneyData?.points) || Number(networthData?.points) || 0,
     };
 
@@ -492,7 +502,7 @@ export default function Home() {
     // Adjusted Total: Cached Total - Cached Liquid + Real Time Liquid
     const totalNetworth = (networthData?.total ?? 0) - cachedLiquidTotal + realTimeLiquidTotal;
     // Use real-time money from money selection (v2/user/money)
-    const walletAmount = userData?.money?.wallet ?? 0;
+    const walletAmount = networthData?.wallet ?? userData?.money?.wallet ?? 0;
 
     // --- Bank Investment Data ---
     // (Moved to lower block)

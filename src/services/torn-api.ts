@@ -68,12 +68,12 @@ export interface TornProfile {
 export interface TornMoney {
     points: number;
     wallet: number;
-    company: number;
-    vault: number;
-    cayman_bank: number;
-    city_bank: { amount: number; time_left: number } | number | null;
+    company: { amount: number } | number;
+    vault: { amount: number } | number;
+    cayman_bank: { amount: number } | number;
+    city_bank: { amount: number; time_left?: number; until?: number } | number | null;
     city_bank_time_left: number | null;
-    faction: number | null;
+    faction: { money: number; points: number } | number | null;
     daily_networth: number;
 }
 
@@ -564,11 +564,26 @@ export async function fetchUserDataWithNetworth(): Promise<CombinedUserData> {
             // Actually V2 money.city_bank might be number or object. 
             // If it's missing or lacks time_left, try to patch from cityBank cache.
             const currentCB = result.userData.money.city_bank;
-            const isComplete = typeof currentCB === 'object' && currentCB !== null && 'time_left' in currentCB;
+            let isComplete = false;
+
+            // Check if V2 provided 'until' (we can calculate time_left)
+            if (typeof currentCB === 'object' && currentCB !== null) {
+                if ('until' in currentCB && typeof currentCB.until === 'number') {
+                    // Calculate time_left from until
+                    const now = Math.floor(Date.now() / 1000);
+                    const timeLeft = Math.max(0, currentCB.until - now);
+                    // Patch it in
+                    (result.userData.money.city_bank as any).time_left = timeLeft;
+                    isComplete = true;
+                } else if ('time_left' in currentCB) {
+                    isComplete = true;
+                }
+            }
 
             if (!isComplete) {
                 const cachedCB = await getCache<{ amount: number; time_left: number }>('cityBank');
                 if (cachedCB) {
+                    // Only patch if we have better data
                     result.userData.money.city_bank = cachedCB;
                 }
             }

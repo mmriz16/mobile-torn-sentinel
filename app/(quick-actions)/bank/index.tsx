@@ -101,7 +101,7 @@ export default function Bank() {
         // Calculate current values
         const moneyData = user.money;
         const networthData = nw?.personalstats?.networth;
-        const currentWallet = Number(moneyData?.wallet) || Number(networthData?.wallet) || 0;
+        const currentWallet = Number(networthData?.wallet) || Number(moneyData?.wallet) || 0;
         const currentStocks = Number(networthData?.stock_market) || 0;
 
         try {
@@ -212,11 +212,18 @@ export default function Bank() {
     // Cayman Bank daily rate (fixed at ~0.03% per day = ~10.95% APY)
     const caymanDailyRate = 0.03;
 
+    // Helper to safely get value from object or number
+    const getMoneyValue = (val: any) => {
+        if (!val) return 0;
+        if (typeof val === 'object' && 'amount' in val) return val.amount;
+        return Number(val) || 0;
+    };
+
     // Calculate Bank Total: wallet + stock_market + bank (Torn Bank) + overseas_bank (Offshore)
-    const wallet = Number(moneyData?.wallet) || Number(networthData?.wallet) || 0;
+    const wallet = Number(networthData?.wallet) || Number(moneyData?.wallet) || 0;
     const stockMarket = Number(networthData?.stock_market) || 0;
-    const tornBank = Number(moneyData?.city_bank) || Number(networthData?.bank) || 0;
-    const offshoreBank = Number(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0;
+    const tornBank = getMoneyValue(moneyData?.city_bank) || Number(networthData?.bank) || 0;
+    const offshoreBank = getMoneyValue(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0;
     const bankTotal = wallet + stockMarket + tornBank + offshoreBank;
 
     const { rate: currentBankRate, tenor: currentTenor } = getCurrentBankRate();

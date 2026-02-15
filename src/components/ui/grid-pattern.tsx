@@ -11,6 +11,7 @@ export function GridPattern() {
         <View
             className="absolute inset-0 pointer-events-none"
             style={{ zIndex: 0 }}
+            pointerEvents="none"
         >
             <Svg width={width} height={height}>
                 <Defs>

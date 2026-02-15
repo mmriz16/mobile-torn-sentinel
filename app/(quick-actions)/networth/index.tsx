@@ -15,6 +15,7 @@ const NETWORTH_LABELS: Record<string, string> = {
     vaults: "Vaults",
     bank: "City Bank",
     overseas_bank: "Cayman Bank",
+    faction: "Faction",
     points: "Points",
     inventory: "Inventory",
     display_case: "Display Case",
@@ -35,7 +36,7 @@ const NETWORTH_LABELS: Record<string, string> = {
 
 // Category groupings
 const ASSET_CATEGORIES = {
-    liquid: ["wallet", "vaults", "bank", "overseas_bank", "points"],
+    liquid: ["wallet", "vaults", "bank", "overseas_bank", "faction", "points"],
     items: ["inventory", "display_case", "bazaar", "item_market", "trade"],
     investments: ["property", "stock_market", "auction_house", "bookie", "company", "enlisted_cars", "piggy_bank"],
     other: ["pending"],
@@ -119,16 +120,24 @@ export default function Networth() {
     const networthData = networth?.personalstats?.networth;
     const moneyData = userData?.money;
 
+    // Helper to safely get value from V2 money object (which might be number or object with amount/money)
+    const getValue = (val: { amount?: number; money?: number } | number | undefined | null): number => {
+        if (val === null || val === undefined) return 0;
+        if (typeof val === 'object') {
+            if ('amount' in val && typeof val.amount === 'number') return val.amount;
+            if ('money' in val && typeof val.money === 'number') return val.money;
+        }
+        return Number(val) || 0;
+    };
+
     // Hybrid approach: Use real-time money data for liquid assets
     // Map real-time money fields to networth keys
-    // Use Number() to ensure proper number conversion and || 0 to handle null/undefined/NaN
-    // Note: For points, we use networthData?.points because it contains the dollar VALUE (quantity × price per point)
-    // whereas moneyData?.points only contains the QUANTITY of points (not the dollar value)
     const realTimeLiquid: Record<string, number> = {
-        wallet: Number(moneyData?.wallet) || Number(networthData?.wallet) || 0,
-        vaults: Number(moneyData?.vault) || Number(networthData?.vaults) || 0,
-        bank: Number(moneyData?.city_bank) || Number(networthData?.bank) || 0,
-        overseas_bank: Number(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0,
+        wallet: Number(networthData?.wallet) || Number(moneyData?.wallet) || 0,
+        vaults: getValue(moneyData?.vault) || Number(networthData?.vaults) || 0,
+        bank: getValue(moneyData?.city_bank) || Number(networthData?.bank) || 0,
+        overseas_bank: getValue(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0,
+        faction: getValue(moneyData?.faction) || 0,
         points: Number(networthData?.points) || 0, // Always use networth value - it's already the dollar value
     };
 
@@ -146,16 +155,23 @@ export default function Networth() {
         other: [],
         liabilities: [],
     };
-    if (networthData) {
-        Object.entries(networthData).forEach(([key, value]) => {
+    const allKeys = new Set(Object.keys(networthData || {}));
+    // Add keys from realTimeLiquid (like faction) that might be missing in networthData
+    Object.keys(realTimeLiquid).forEach(k => allKeys.add(k));
+
+    if (allKeys.size > 0) {
+        Array.from(allKeys).forEach((key) => {
             if (key === "total") return;
+
+            // Get base value from networthData if available
+            const baseValue = (networthData as any)?.[key] || 0;
 
             // For liquid assets, use real-time values from money endpoint
             let displayValue: number;
             if (key in realTimeLiquid) {
                 displayValue = realTimeLiquid[key];
             } else {
-                displayValue = value as number;
+                displayValue = baseValue as number;
             }
 
             // Skip items with value 0

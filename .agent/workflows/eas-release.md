@@ -17,25 +17,32 @@ This command manages Expo Application Services (EAS) updates and builds for the 
 ## Sub-commands
 
 ```
-/eas-release update    - Publish an OTA update
+/eas-release update    - Publish an OTA update (Android only by default)
 /eas-release build     - Trigger a native build
 /eas-release status    - Check build status
 ```
 
 ---
 
-## EAS Update Flow
+## EAS Update Flow (Android Only)
+
+// turbo-all
 
 1. **Check Environment**
    - Ensure you are on the correct branch.
    - Confirm changes are committed (optional, but recommended).
 
-2. **Run Update**
-   - **Command**: `eas update --branch <branch-name> --message "<message>"`
-   - **Interactive**: If arguments are missing, satisfy them interactively.
+2. **Run Update (Android Only)**
+   - **Command**: `eas update --platform android --branch production --message "<message>"`
+   - Default branch: `production`
+   - **Interactive**: If `--message` is missing, ask the user or generate from recent git commits.
 
    > [!IMPORTANT]
    > EAS Update works for JavaScript/asset changes only. Native changes require a rebuild.
+
+   > [!TIP]
+   > To update ALL platforms, add `--platform all` explicitly:
+   > `eas update --platform all --branch <branch-name> --message "<message>"`
 
 ---
 
@@ -56,6 +63,8 @@ This command manages Expo Application Services (EAS) updates and builds for the 
 ## Examples
 
 ```
-/eas-release update --branch preview --message "Fix login bug"
+/eas-release update --message "Fix login bug"
+/eas-release update --branch production --message "Release v1.2"
+/eas-release update --platform all --branch preview --message "Cross-platform fix"
 /eas-release build --platform android --profile preview
 ```

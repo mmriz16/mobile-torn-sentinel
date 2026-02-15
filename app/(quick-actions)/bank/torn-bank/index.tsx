@@ -168,7 +168,12 @@ export default function TornBank() {
     // Get bank balance (city_bank from money or bank from networth)
     const moneyData = userData?.money;
     const networthData = networth?.personalstats?.networth;
-    const tornBank = Number(moneyData?.city_bank) || Number(networthData?.bank) || 0;
+    const getMoneyValue = (val: any) => {
+        if (!val) return 0;
+        if (typeof val === 'object' && 'amount' in val) return val.amount;
+        return Number(val) || 0;
+    };
+    const tornBank = getMoneyValue(moneyData?.city_bank) || Number(networthData?.bank) || 0;
 
     if (isLoading) {
         return (
@@ -263,7 +268,7 @@ export default function TornBank() {
                                     <TouchableOpacity
                                         onPress={() => {
                                             setAmountMode('wallet');
-                                            const wallet = Number(userData?.money?.wallet) || Number(networth?.personalstats?.networth?.wallet) || 0;
+                                            const wallet = Number(networth?.personalstats?.networth?.wallet) || Number(userData?.money?.wallet) || 0;
                                             setInvestAmount(wallet.toLocaleString('en-US'));
                                         }}
                                         activeOpacity={0.7}

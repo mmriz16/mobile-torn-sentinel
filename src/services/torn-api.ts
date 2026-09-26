@@ -81,6 +81,17 @@ export interface TornProperty {
     property: { id: number; name: string };
     status: string; // 'rented', 'owned', etc.
     rental_period_remaining: number; // Days remaining
+    // Extra v2 'property' selection fields (may be absent depending on status)
+    owner?: { id: number; name: string };
+    happy?: number;
+    upkeep?: { property: number; staff: number };
+    market_price?: number;
+    modifications?: string[];
+    staff?: { type: string; amount: number }[];
+    used_by?: { id: number; name: string }[];
+    cost?: number;
+    cost_per_day?: number;
+    rental_period?: number;
 }
 
 export interface TornCooldowns {
@@ -209,36 +220,20 @@ function parseBankInterestPerk(perk: string): number {
  */
 export async function fetchBankInterestModifier(): Promise<number> {
     try {
-        const apiKey = await getApiKey();
-        if (!apiKey) return 0;
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        trackApiRequest();
-        const response = await fetch(
-            `https://api.torn.com/user/?selections=perks&key=${apiKey}`,
-            { signal: controller.signal, cache: 'no-store' }
-        );
-        clearTimeout(timeoutId);
-
-        const data = await response.json();
-
-        if (data.error) {
-            console.error("Torn API error:", data.error);
-            return 0;
-        }
+        // Reuse the cached perks call instead of fetching perks again
+        const perks = await fetchPerks();
+        if (!perks) return 0;
 
         // Collect all perks arrays - bank interest bonus can come from merits and other sources
         const allPerks: string[] = [
-            ...(data.faction_perks || []),
-            ...(data.job_perks || []),
-            ...(data.property_perks || []),
-            ...(data.education_perks || []),
-            ...(data.enhancer_perks || []),
-            ...(data.book_perks || []),
-            ...(data.stock_perks || []),
-            ...(data.merit_perks || []),
+            ...perks.faction_perks,
+            ...perks.job_perks,
+            ...perks.property_perks,
+            ...perks.education_perks,
+            ...perks.enhancer_perks,
+            ...perks.book_perks,
+            ...perks.stock_perks,
+            ...perks.merit_perks,
         ];
 
         // Parse bank interest percentages and sum them
@@ -1341,6 +1336,53 @@ function parseGymGainsPerk(perk: string): number {
 }
 
 /**
+ * Fetch all perk lists (v1 perks selection), cached for 10 minutes.
+ */
+export async function fetchPerks(): Promise<TornPerks | null> {
+    try {
+        const cached = await getCache<TornPerks>('perks');
+        if (cached) return cached;
+
+        const apiKey = await getApiKey();
+        if (!apiKey) return null;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        trackApiRequest();
+        const response = await fetch(
+            `https://api.torn.com/user/?selections=perks&key=${apiKey}`,
+            { signal: controller.signal, cache: 'no-store' }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Torn API error:", data.error);
+            return null;
+        }
+
+        const result: TornPerks = {
+            faction_perks: data.faction_perks || [],
+            job_perks: data.job_perks || [],
+            property_perks: data.property_perks || [],
+            education_perks: data.education_perks || [],
+            enhancer_perks: data.enhancer_perks || [],
+            book_perks: data.book_perks || [],
+            stock_perks: data.stock_perks || [],
+            merit_perks: data.merit_perks || [],
+        };
+
+        setCache('perks', result, 10 * 60 * 1000); // 10 min cache
+        return result;
+    } catch (error) {
+        console.error("Failed to fetch perks:", error);
+        return null;
+    }
+}
+
+/**
  * Fetch all perks and calculate total gym gains modifier.
  * Returns the modifier M (e.g., 1.02 for 2% bonus)
  */
@@ -1421,6 +1463,7 @@ const apiCache: {
     drugStats?: CacheEntry<TornDrugStats>;
     educationCourses?: CacheEntry<Record<string, string>>;
     tornItems?: CacheEntry<Record<string, any>>;
+    perks?: CacheEntry<TornPerks>;
     // We can add more if needed
 } = {};
 

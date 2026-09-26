@@ -71,10 +71,29 @@ export interface TornMoney {
     company: number;
     vault: number;
     cayman_bank: number;
-    city_bank: { amount: number; time_left: number } | number | null;
+    city_bank: TornCityBank | number | null;
     city_bank_time_left: number | null;
     faction: number | null;
     daily_networth: number;
+}
+
+// v2 'money' returns city_bank as { amount, profit, duration, interest_rate, invested_at, until };
+// the v1 money/networth call adds time_left (merged in fetchUserDataWithNetworth)
+export interface TornCityBank {
+    amount: number;
+    time_left?: number;
+    profit?: number;
+    duration?: number;
+    interest_rate?: number;
+    invested_at?: number;
+    until?: number;
+}
+
+// City bank balance from money data, whether the API returned a number or an object
+export function getCityBankAmount(money: TornMoney | null | undefined): number {
+    const cityBank = money?.city_bank;
+    if (cityBank && typeof cityBank === 'object') return Number(cityBank.amount) || 0;
+    return Number(cityBank) || 0;
 }
 
 export interface TornProperty {
@@ -542,9 +561,12 @@ export async function fetchUserDataWithNetworth(): Promise<CombinedUserData> {
                         };
                         setCache('cityBank', cbData, 60 * 1000); // 60s TTL matches networth
 
-                        // Patch user data immediately if available
+                        // Patch user data immediately if available (keep v2 fields like profit/until)
                         if (result.userData && result.userData.money) {
-                            result.userData.money.city_bank = cbData;
+                            const currentCB = result.userData.money.city_bank;
+                            result.userData.money.city_bank = typeof currentCB === 'object' && currentCB !== null
+                                ? { ...currentCB, ...cbData }
+                                : cbData;
                         }
                     }
                 }
@@ -564,7 +586,9 @@ export async function fetchUserDataWithNetworth(): Promise<CombinedUserData> {
             if (!isComplete) {
                 const cachedCB = await getCache<{ amount: number; time_left: number }>('cityBank');
                 if (cachedCB) {
-                    result.userData.money.city_bank = cachedCB;
+                    result.userData.money.city_bank = typeof currentCB === 'object' && currentCB !== null
+                        ? { ...currentCB, ...cachedCB }
+                        : cachedCB;
                 }
             }
         }

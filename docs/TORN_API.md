@@ -13,6 +13,14 @@ Reference for every Torn API call made by the app (`src/services/torn-api.ts`, s
 | v2 + v1 mixing | v2 selections that aren't migrated fall back to v1 responses. `legacy=<selection>` on a v2 URL forces the v1 response shape, which is useful for migrating one selection at a time. |
 | Networth | **Keep v1.** v2 `/user/networth` only returns `money / items / assets / points / total`. The per-category breakdown used by the Networth, Assets and Bank screens only exists in v1 `user/?selections=networth`. |
 
+## Verified against live responses (2026-09-26)
+
+- **v2 `money.city_bank` is an object:** `{amount, profit, duration (days), interest_rate (base APR %), invested_at, until}`. Read the balance with `getCityBankAmount()`; `Number(city_bank)` is `NaN`. `profit` is the exact interest at maturity. `fetchUserDataWithNetworth` merges v1 `time_left` into this object and no longer replaces it.
+- **Merit bank bonus multiplies the rate.** It is not added. "+50% bank interest" on a 36.94% base gives `profit ≈ amount × 36.94% × 1.5 × 7/365`, so the effective APR is `rate × (1 + bonus)`.
+- **v2 `property`:** `modifications` and `staff[].type` are display strings (`"Airstrip"`, `"Maid"`). A rented property includes `cost`, `cost_per_day`, `rental_period`, `rental_period_remaining`, `rented_by`, and `owner` is the landlord.
+- **v1 networth:** `loan` and `unpaidfees` are negative numbers.
+- **v2 `cooldowns`** has no `jail` field.
+
 ## Upcoming removals (from the spec)
 
 | Date | What | Affects this app? |

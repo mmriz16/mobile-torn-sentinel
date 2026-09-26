@@ -1,11 +1,12 @@
 import Logo from "@/assets/logo.svg";
 import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { PhysicalCard } from "@/src/components/ui/physical-card";
 import { TitleBar } from "@/src/components/ui/title-bar";
-import { fetchUserDataWithNetworth, formatCurrency, TornNetworth, TornUserData } from "@/src/services/torn-api";
+import { fetchUserDataWithNetworth, formatCurrency, TornNetworth, TornUserData, getCityBankAmount } from "@/src/services/torn-api";
 import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive";
 import { ChartNoAxesCombined, HelpCircle, LucideIcon, Package, Receipt, Wallet } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ImageBackground, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Human-readable labels for networth fields
@@ -127,7 +128,7 @@ export default function Networth() {
     const realTimeLiquid: Record<string, number> = {
         wallet: Number(moneyData?.wallet) || Number(networthData?.wallet) || 0,
         vaults: Number(moneyData?.vault) || Number(networthData?.vaults) || 0,
-        bank: Number(moneyData?.city_bank) || Number(networthData?.bank) || 0,
+        bank: getCityBankAmount(moneyData) || Number(networthData?.bank) || 0,
         overseas_bank: Number(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0,
         points: Number(networthData?.points) || 0, // Always use networth value - it's already the dollar value
     };
@@ -179,13 +180,7 @@ export default function Networth() {
                 contentContainerStyle={{ padding: hs(16), gap: vs(10) }}
             >
                 {/* Total Networth Header */}
-                <ImageBackground
-                    source={require('@/assets/images/card.png')}
-                    resizeMode="cover"
-                    className="bg-tactical-900 border border-tactical-800 rounded-lg overflow-hidden"
-                    style={{ padding: ms(16), gap: ms(24) }}
-                    imageStyle={{ borderRadius: 8 }}
-                >
+                <PhysicalCard>
                     <View className="flex-row items-center justify-between">
                         <View style={{ gap: ms(4) }}>
                             <Text
@@ -247,7 +242,7 @@ export default function Networth() {
                             </Text>
                         </View>
                     </View>
-                </ImageBackground>
+                </PhysicalCard>
 
                 {/* Category Sections */}
                 {Object.entries(groupedItems).map(([category, items]) => {

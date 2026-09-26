@@ -1,11 +1,12 @@
 import { Card } from "@/src/components/ui/card";
 import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { PhysicalCard } from "@/src/components/ui/physical-card";
 import { ProgressBar } from "@/src/components/ui/progress-bar";
 import { syncNetworthAndGetProfit } from "@/src/services/profit-tracker";
-import { fetchBankInterestModifier, fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBankDetails, TornNetworth } from "@/src/services/torn-api";
+import { fetchBankInterestModifier, fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBank, TornCityBankDetails, TornNetworth } from "@/src/services/torn-api";
 import { moderateScale as ms, verticalScale as vs } from '@/src/utils/responsive';
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ImageBackground, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Tenor buckets derived from the remaining investment time (same buckets as the Bank pages)
@@ -39,6 +40,7 @@ export default function Profit() {
     const [dailyProfit, setDailyProfit] = useState(0);
     const [profitPercent, setProfitPercent] = useState(0);
     const [cityBank, setCityBank] = useState<TornCityBankDetails | null>(null);
+    const [userCityBank, setUserCityBank] = useState<TornCityBank | null>(null);
     const [bankRates, setBankRates] = useState<TornBankRates | null>(null);
     const [bankBonus, setBankBonus] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
@@ -62,6 +64,8 @@ export default function Profit() {
         ]);
         setNetworth(networthData);
         setCityBank(cityBankResult);
+        const liveCityBank = userData?.money?.city_bank;
+        setUserCityBank(liveCityBank && typeof liveCityBank === 'object' ? liveCityBank : null);
         setBankRates(rates);
         setBankBonus(bonus);
 
@@ -93,13 +97,22 @@ export default function Profit() {
 
     const networthTotal = networth?.personalstats?.networth?.total || 0;
 
-    // Torn Bank investment: Interest = Principal × APR × (days/365)
-    const hasInvestment = !!cityBank && cityBank.amount > 0 && cityBank.time_left > 0;
-    const tenor = hasInvestment ? getTenor(cityBank!.time_left) : null;
-    const apr = tenor && bankRates ? (bankRates[tenor.key] || 0) + bankBonus * 100 : 0;
-    const projectedInterest = hasInvestment && tenor ? Math.floor(cityBank!.amount * (apr / 100) * (tenor.days / 365)) : 0;
-    const investProgress = hasInvestment && tenor ? 1 - cityBank!.time_left / (tenor.days * 86400) : 0;
-    const daysLeft = hasInvestment ? Math.ceil(cityBank!.time_left / 86400) : 0;
+    // Torn Bank investment. v2 money.city_bank carries the exact profit/rate/until; fall back to an
+    // estimate from the tenor rates: Interest = Principal × APR × (1 + merit bonus) × (days/365)
+    const liveCB = userCityBank && userCityBank.amount > 0 ? userCityBank : null;
+    const principal = liveCB?.amount ?? cityBank?.amount ?? 0;
+    const timeLeft = liveCB?.until ? Math.max(0, liveCB.until - Math.floor(Date.now() / 1000)) : (cityBank?.time_left ?? 0);
+    const hasInvestment = principal > 0 && timeLeft > 0;
+    const tenor = hasInvestment
+        ? (liveCB?.duration ? TENORS.find(t => t.days === liveCB.duration) ?? getTenor(liveCB.duration * 86400) : getTenor(timeLeft))
+        : null;
+    const baseRate = liveCB?.interest_rate ?? (tenor && bankRates ? bankRates[tenor.key] || 0 : 0);
+    const apr = baseRate * (1 + bankBonus);
+    const projectedInterest = hasInvestment && tenor
+        ? (liveCB?.profit ?? Math.floor(principal * (apr / 100) * (tenor.days / 365)))
+        : 0;
+    const investProgress = hasInvestment && tenor ? 1 - timeLeft / (tenor.days * 86400) : 0;
+    const daysLeft = hasInvestment ? Math.ceil(timeLeft / 86400) : 0;
 
     // Trade calculator
     const buy = parseAmount(buyPrice);
@@ -137,13 +150,7 @@ export default function Profit() {
             <ScrollView className="flex-1" contentContainerStyle={{ padding: ms(16), gap: vs(16) }} keyboardShouldPersistTaps="handled">
 
                 {/* Daily Profit Card */}
-                <ImageBackground
-                    source={require('@/assets/images/card.png')}
-                    resizeMode="cover"
-                    className="bg-tactical-900 border border-tactical-800 rounded-lg overflow-hidden"
-                    style={{ padding: ms(16), gap: vs(24) }}
-                    imageStyle={{ borderRadius: 8 }}
-                >
+                <PhysicalCard>
                     <View style={{ gap: vs(2) }}>
                         <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Daily Profit</Text>
                         <Text className={dailyProfit >= 0 ? "text-accent-green" : "text-accent-red"} style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(34) }}>
@@ -162,7 +169,7 @@ export default function Profit() {
                             </Text>
                         </View>
                     </View>
-                </ImageBackground>
+                </PhysicalCard>
 
                 {/* Investment Income */}
                 <View style={{ gap: vs(10) }}>
@@ -187,7 +194,7 @@ export default function Profit() {
                                 fillClassName="bg-accent-green rounded-full"
                             />
                             <View className="flex-row justify-between items-center">
-                                <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Principal {formatCurrencyShort(cityBank!.amount)}</Text>
+                                <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Principal {formatCurrencyShort(principal)}</Text>
                                 <Text className="text-white/50 uppercase" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>{daysLeft} Days Left</Text>
                             </View>
                         </Card>

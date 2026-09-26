@@ -1,12 +1,13 @@
 import { Card } from "@/src/components/ui/card";
 import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { PhysicalCard } from "@/src/components/ui/physical-card";
 import { ProgressBar } from "@/src/components/ui/progress-bar";
-import { fetchUserDataWithNetworth, formatCurrency, TornNetworth, TornUserData } from "@/src/services/torn-api";
+import { fetchUserDataWithNetworth, formatCurrency, getCityBankAmount, TornNetworth, TornUserData } from "@/src/services/torn-api";
 import { horizontalScale as hs, moderateScale as ms, verticalScale as vs } from '@/src/utils/responsive';
 import { router } from "expo-router";
 import { ChartNoAxesCombined, LucideIcon, Package, Wallet } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ImageBackground, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Human-readable labels for networth fields
@@ -82,7 +83,7 @@ export default function Assets() {
     }
     values.wallet = Number(moneyData?.wallet) || values.wallet || 0;
     values.vaults = Number(moneyData?.vault) || values.vaults || 0;
-    values.bank = Number(moneyData?.city_bank) || values.bank || 0;
+    values.bank = getCityBankAmount(moneyData) || values.bank || 0;
     values.overseas_bank = Number(moneyData?.cayman_bank) || values.overseas_bank || 0;
 
     const classes = ASSET_CLASSES.map(c => ({
@@ -104,13 +105,7 @@ export default function Assets() {
             <ScrollView className="flex-1" contentContainerStyle={{ padding: ms(16), gap: vs(16) }}>
 
                 {/* Net Assets Card */}
-                <ImageBackground
-                    source={require('@/assets/images/card.png')}
-                    resizeMode="cover"
-                    className="bg-tactical-900 border border-tactical-800 rounded-lg overflow-hidden"
-                    style={{ padding: ms(16), gap: vs(24) }}
-                    imageStyle={{ borderRadius: 8 }}
-                >
+                <PhysicalCard>
                     <View style={{ gap: vs(2) }}>
                         <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Net Assets</Text>
                         <Text className="text-accent-yellow" style={{ fontFamily: 'JetBrainsMono_800ExtraBold', fontSize: ms(34) }}>{formatCurrency(netAssets)}</Text>
@@ -127,7 +122,7 @@ export default function Assets() {
                             </Text>
                         </View>
                     </View>
-                </ImageBackground>
+                </PhysicalCard>
 
                 {/* Allocation */}
                 <View style={{ gap: vs(10) }}>

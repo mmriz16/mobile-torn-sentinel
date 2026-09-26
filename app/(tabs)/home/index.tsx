@@ -29,8 +29,7 @@ import {
     getApiRequestCount,
     RankedWarsResponse,
     TornNetworth,
-    TornUserData
-} from "@/src/services/torn-api";
+    TornUserData, getCityBankAmount } from "@/src/services/torn-api";
 import { scheduleAllNotifications } from "@/src/utils/notifications";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
@@ -480,7 +479,7 @@ export default function Home() {
     const realTimeLiquid: Record<string, number> = {
         wallet: Number(moneyData?.wallet) || Number(networthData?.wallet) || 0,
         vaults: Number(moneyData?.vault) || Number(networthData?.vaults) || 0,
-        bank: Number(moneyData?.city_bank) || Number(networthData?.bank) || 0,
+        bank: getCityBankAmount(moneyData) || Number(networthData?.bank) || 0,
         overseas_bank: Number(moneyData?.cayman_bank) || Number(networthData?.overseas_bank) || 0,
         points: Number(moneyData?.points) || Number(networthData?.points) || 0,
     };

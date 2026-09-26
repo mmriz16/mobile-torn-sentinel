@@ -1,11 +1,12 @@
 import { Card } from "@/src/components/ui/card";
 import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { PhysicalCard } from "@/src/components/ui/physical-card";
 import { ProgressBar } from "@/src/components/ui/progress-bar";
 import { TitleBar } from "@/src/components/ui/title-bar";
 import { fetchPerks, fetchUserData, formatCurrency, formatNumber, TornPerks, TornUserData } from "@/src/services/torn-api";
 import { moderateScale as ms, verticalScale as vs } from '@/src/utils/responsive';
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ImageBackground, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Human-readable property status labels
@@ -73,13 +74,7 @@ export default function Property() {
             <ScrollView className="flex-1" contentContainerStyle={{ padding: ms(16), gap: vs(16) }}>
 
                 {/* Property Card */}
-                <ImageBackground
-                    source={require('@/assets/images/card.png')}
-                    resizeMode="cover"
-                    className="bg-tactical-900 border border-tactical-800 rounded-lg overflow-hidden"
-                    style={{ padding: ms(16), gap: vs(24) }}
-                    imageStyle={{ borderRadius: 8 }}
-                >
+                <PhysicalCard>
                     <View className="flex-row justify-between">
                         <View style={{ gap: vs(2) }}>
                             <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Property</Text>
@@ -105,7 +100,7 @@ export default function Property() {
                             <Text className="text-white" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(20) }}>{property?.happy ? formatNumber(property.happy) : '-'}</Text>
                         </View>
                     </View>
-                </ImageBackground>
+                </PhysicalCard>
 
                 {/* Rental Period (only when rented) */}
                 {isRented && (

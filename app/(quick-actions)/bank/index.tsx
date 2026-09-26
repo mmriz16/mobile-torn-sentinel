@@ -1,14 +1,15 @@
 import Logo from "@/assets/logo.svg";
 import { Card } from "@/src/components/ui/card";
 import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { PhysicalCard } from "@/src/components/ui/physical-card";
 import { TitleBar } from "@/src/components/ui/title-bar";
 import { supabase } from "@/src/services/supabase";
-import { fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBankDetails, TornNetworth, TornUserData } from "@/src/services/torn-api";
+import { fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBankDetails, TornNetworth, TornUserData, getCityBankAmount } from "@/src/services/torn-api";
 import { moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ImageBackground, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // Helper: Get today's date string at midnight in user's timezone (YYYY-MM-DD)
@@ -236,13 +237,7 @@ export default function Bank() {
                 <View style={{ gap: vs(10) }}>
 
                     {/* Bank Card */}
-                    <ImageBackground
-                        source={require('@/assets/images/card.png')}
-                        resizeMode="cover"
-                        className="bg-tactical-900 border border-tactical-800 rounded-lg overflow-hidden"
-                        style={{ padding: ms(16), gap: vs(24) }}
-                        imageStyle={{ borderRadius: 8 }}
-                    >
+                    <PhysicalCard>
                         <View className="flex-row justify-between">
                             <View style={{ gap: vs(2) }}>
                                 <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Name</Text>
@@ -264,7 +259,7 @@ export default function Bank() {
                                 <Text className="text-white" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(20) }}>{userData?.profile?.age ? formatDaysPlayed(userData.profile.age) : "--/--"}</Text>
                             </View>
                         </View>
-                    </ImageBackground>
+                    </PhysicalCard>
 
                     {/* Wallet & Company Stocks */}
                     <View className="flex-row" style={{ gap: vs(10) }}>

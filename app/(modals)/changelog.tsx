@@ -243,7 +243,7 @@ export default function Changelog({ onClose }: ChangelogProps) {
                                     <View style={{ paddingLeft: ms(3) }}>
                                         <View className="border-l border-tactical-800" style={{ paddingVertical: ms(4), paddingLeft: ms(8) }}>
                                             <View className="bg-tactical-900 border border-tactical-800" style={{ padding: ms(10), gap: ms(4) }}>
-                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Optimized image assets (icon.png 77MB -> 1MB) to fix AAPT2 timeout</Text>
+                                                <Text className="text-white/70" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}>- Optimized image assets (icon.png 77MB {'->'} 1MB) to fix AAPT2 timeout</Text>
                                             </View>
                                         </View>
                                     </View>

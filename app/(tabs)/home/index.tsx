@@ -29,8 +29,7 @@ import {
     getApiRequestCount,
     RankedWarsResponse,
     TornNetworth,
-    TornUserData
-} from "@/src/services/torn-api";
+    TornUserData, getCityBankAmount } from "@/src/services/torn-api";
 import { scheduleAllNotifications } from "@/src/utils/notifications";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";

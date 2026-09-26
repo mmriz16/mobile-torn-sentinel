@@ -1,13 +1,14 @@
 import Logo from "@/assets/logo.svg";
 import { Card } from "@/src/components/ui/card";
 import { GridPattern } from "@/src/components/ui/grid-pattern";
+import { PhysicalCard } from "@/src/components/ui/physical-card";
 import { ProgressBar } from "@/src/components/ui/progress-bar";
 import { TitleBar } from "@/src/components/ui/title-bar";
-import { fetchBankInterestModifier, fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBankDetails, TornNetworth, TornUserData } from "@/src/services/torn-api";
+import { fetchBankInterestModifier, fetchBankRates, fetchCityBankDetails, fetchUserDataWithNetworth, formatCurrency, TornBankRates, TornCityBankDetails, TornNetworth, TornUserData, getCityBankAmount } from "@/src/services/torn-api";
 import { moderateScale as ms, verticalScale as vs } from "@/src/utils/responsive";
 import { Bell } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ImageBackground, PanResponder, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, PanResponder, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type AmountMode = 'wallet' | 'cap';
@@ -112,8 +113,8 @@ export default function TornBank() {
         if (!bankRates) return 0;
         const tenorKey = TENORS[tenorStep].key;
         const baseRate = bankRates[tenorKey] || 0;
-        // Add merit bonus (bankInterestBonus is already in decimal, convert to percentage)
-        return baseRate + (bankInterestBonus * 100);
+        // Merit bonus scales the rate (e.g. +50% bank interest: 37.82% -> 56.73%)
+        return baseRate * (1 + bankInterestBonus);
     };
 
     // Calculate projected return based on invest amount and selected tenor rate
@@ -168,12 +169,7 @@ export default function TornBank() {
     // Get bank balance (city_bank from money or bank from networth)
     const moneyData = userData?.money;
     const networthData = networth?.personalstats?.networth;
-    const getMoneyValue = (val: any) => {
-        if (!val) return 0;
-        if (typeof val === 'object' && 'amount' in val) return val.amount;
-        return Number(val) || 0;
-    };
-    const tornBank = getMoneyValue(moneyData?.city_bank) || Number(networthData?.bank) || 0;
+    const tornBank = getCityBankAmount(moneyData) || Number(networthData?.bank) || 0;
 
     if (isLoading) {
         return (
@@ -191,13 +187,7 @@ export default function TornBank() {
             <View className="flex-1" style={{ padding: ms(16), gap: vs(16) }}>
 
                 {/* Bank Card */}
-                <ImageBackground
-                    source={require('@/assets/images/card.png')}
-                    resizeMode="cover"
-                    className="bg-tactical-900 border border-tactical-800 rounded-lg overflow-hidden"
-                    style={{ padding: ms(16), gap: vs(24) }}
-                    imageStyle={{ borderRadius: 8 }}
-                >
+                <PhysicalCard>
                     <View className="flex-row justify-between">
                         <View style={{ gap: vs(2) }}>
                             <Text className="text-white/50" style={{ fontFamily: 'Inter_500Medium', fontSize: ms(10) }}>Name</Text>
@@ -219,7 +209,7 @@ export default function TornBank() {
                             <Text className="text-white" style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(20) }}>{userData?.profile?.age ? formatDaysPlayed(userData.profile.age) : "--/--"}</Text>
                         </View>
                     </View>
-                </ImageBackground>
+                </PhysicalCard>
 
                 {/* Active Investsments */}
                 <View style={{ gap: vs(10) }}>
@@ -358,7 +348,7 @@ export default function TornBank() {
                                             className={index === tenorStep ? "text-accent-green" : "text-white/30"}
                                             style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: ms(10) }}
                                         >
-                                            +{bankRates ? ((bankRates[tenor.key] || 0) + (bankInterestBonus * 100)).toFixed(2) : '0.00'}%
+                                            +{bankRates ? ((bankRates[tenor.key] || 0) * (1 + bankInterestBonus)).toFixed(2) : '0.00'}%
                                         </Text>
                                     </TouchableOpacity>
                                 ))}

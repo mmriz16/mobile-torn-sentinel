@@ -114,6 +114,7 @@ export default function TornBank() {
         const tenorKey = TENORS[tenorStep].key;
         const baseRate = bankRates[tenorKey] || 0;
         // Merit bonus scales the rate (e.g. +50% bank interest: 37.82% -> 56.73%)
+        // Formula: Base Rate * (1 + Bonus Multiplier)
         return baseRate * (1 + bankInterestBonus);
     };
 
